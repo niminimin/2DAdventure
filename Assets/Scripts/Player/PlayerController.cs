@@ -53,7 +53,7 @@ public class PlayerController : MonoBehaviour
 
     private void move()
     {
-        rb.velocity = new Vector2(inputDirection.x * speed * Time.deltaTime , rb.velocity.y);
+        rb.velocity = new Vector2(inputDirection.x * speed, rb.velocity.y);
         int curDir = (int)transform.localScale.x;
         if(inputDirection.x > 0)
         {

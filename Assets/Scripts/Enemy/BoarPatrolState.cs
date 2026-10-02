@@ -7,9 +7,14 @@ public class BoarPatrolState : BaseState
     public override void OnEnter(Enemy enemy)
     {
         curEnemy = enemy;
+        curEnemy.curSpeed = curEnemy.normalSpeed;
     }
     public override void LogicUpdate()
     {
+        if (curEnemy.FoundPlayer())
+        {
+            curEnemy.SwitchState(Enemy.EnemyState.Chase);
+        }
         // 等待中：不重新判断条件，避免每帧反复置位导致 isWait / 速度 / 朝向震荡。
         // 解除等待由 Enemy.TimeCounter() 负责。
         if (curEnemy.isWait)
@@ -40,6 +45,7 @@ public class BoarPatrolState : BaseState
     public override void OnExit()
     {
         curEnemy.animator.SetBool("isWalk", false);
+        Debug.Log("exit");
     }
 
 

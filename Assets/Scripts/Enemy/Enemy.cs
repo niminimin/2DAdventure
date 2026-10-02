@@ -11,13 +11,21 @@ public class Enemy : MonoBehaviour
     [Header("基本参数")]
     public float normalSpeed;
     public float chaseSpeed;
-    [HideInInspector] public float curSpeed;
+    public float curSpeed;
     public Vector3 faceDir;
     public float woundForce;
 
     [Header("计时器")]
     public float waitTime;
     public float waitTimeCount;
+    public float lostTime;
+    public float lostTimeCount;
+
+    [Header("检测玩家")]
+    public Vector2 centerOffset;
+    public Vector2 checkSize;
+    public float checkDistance;
+    public LayerMask attackLayer;
 
     [Header("状态")]
     public bool isWounded;
@@ -63,8 +71,7 @@ public class Enemy : MonoBehaviour
 
     public virtual void move()
     {
-        curSpeed = normalSpeed;
-        rb.velocity = new Vector2(curSpeed * faceDir.x * Time.deltaTime, rb.velocity.y);
+        rb.velocity = new Vector2(curSpeed * faceDir.x, rb.velocity.y);
     }
 
     private void TimeCounter()
@@ -81,8 +88,48 @@ public class Enemy : MonoBehaviour
                 
             }
         }
+
+        if (curState == chaseState && !FoundPlayer())
+        {
+            lostTimeCount += Time.deltaTime;
+        }
+        else
+        {
+            lostTimeCount = 0;
+        }
     }
 
+    public bool FoundPlayer()
+    {
+        return Physics2D.BoxCast(transform.position + (Vector3)centerOffset, checkSize, 0, faceDir, checkDistance, attackLayer);
+    }
+
+    public void SwitchState(EnemyState state)
+    {
+        BaseState newState = curState;
+        switch (state)
+        {
+            case EnemyState.Patrol:
+                newState = patrolState;
+                break;
+            case EnemyState.Chase:
+                newState = chaseState;
+                break;
+            default:
+                break;
+        }
+        if(newState == curState) return;
+        if(newState == null)
+        {
+            Debug.LogError($"[{name}] 状态 {state} 未初始化，已忽略切换");
+            return;
+        }
+        curState.OnExit();
+        curState = newState;
+        curState.OnEnter(this);
+    }
+
+    #region Event
     //Event
     public void onTakeDamage(Transform attackerTrans)
     {
@@ -98,7 +145,7 @@ public class Enemy : MonoBehaviour
         isWounded = true;
         animator.SetTrigger("Wounded");
         Vector2 dir = new Vector2(transform.position.x - attackerTrans.position.x, 0).normalized;
-
+        rb.velocity = Vector2.zero;
         StartCoroutine(onWounded(dir));
     }
 
@@ -119,5 +166,17 @@ public class Enemy : MonoBehaviour
     public void DestroyAfterAnimation()
     {
         Destroy(this.gameObject);
+    }
+    #endregion
+
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.DrawWireSphere(transform.position + (Vector3)centerOffset + new Vector3(checkDistance * -transform.localScale.x, 0), 0.2f);
+    }
+    public enum EnemyState
+    {
+        Patrol,
+        Chase,
+        Skill
     }
 }
