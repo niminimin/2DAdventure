@@ -1,0 +1,50 @@
+# 统一行尾：避免 Windows 的 CRLF 与 Unity 生成的 LF 混用造成「整个文件都改了」的假 diff
+* text=auto
+
+# C# 源码
+*.cs         text diff=csharp
+
+# 着色器 / UI 标记
+*.shader     text
+*.cginc      text
+*.hlsl       text
+*.uxml       text
+*.uss        text
+
+# 配置与文本资源
+*.json       text
+*.xml        text
+*.yml        text
+*.yaml       text
+*.asmdef     text
+*.md         text
+
+# ---------------------------------------------------------------
+# Unity 的 YAML 资产（.unity/.prefab/.asset/.controller/.anim）
+# 不做三方合并：冲突时统一保留「当前分支」的版本，再由 Unity 自己
+# 重新序列化，避免 git 逐行合并写出半损坏的资产文件。
+# 需要在 git config 中注册 ours 驱动（已在本机配置）。
+# ---------------------------------------------------------------
+*.unity      text merge=ours
+*.prefab     text merge=ours
+*.asset      text merge=ours
+*.controller text merge=ours
+*.anim       text merge=ours
+
+# 二进制资源：不做行尾转换
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.psd   binary
+*.tga   binary
+*.wav   binary
+*.mp3   binary
+*.ogg   binary
+*.ttf   binary
+*.otf   binary
+*.fbx   binary
+*.dll   binary
+*.so    binary
+*.dylib binary
+*.exe   binary

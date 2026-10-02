@@ -71,14 +71,14 @@ public class Enemy : MonoBehaviour
     {
         if (isWait)
         {
-            animator.SetBool("isWalk", false);
+            
             waitTimeCount += Time.deltaTime;
             if(waitTimeCount >= waitTime)
             {
                 waitTimeCount = 0;
                 isWait = false;
                 transform.localScale = new Vector3(faceDir.x, 1, 1);
-                animator.SetBool("isWalk", true);
+                
             }
         }
     }
