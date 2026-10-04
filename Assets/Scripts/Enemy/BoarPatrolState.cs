@@ -8,6 +8,7 @@ public class BoarPatrolState : BaseState
     {
         curEnemy = enemy;
         curEnemy.curSpeed = curEnemy.normalSpeed;
+        curEnemy.animator.SetBool("isWalk", true);
     }
     public override void LogicUpdate()
     {
@@ -45,7 +46,6 @@ public class BoarPatrolState : BaseState
     public override void OnExit()
     {
         curEnemy.animator.SetBool("isWalk", false);
-        Debug.Log("exit");
     }
 
 
