@@ -38,6 +38,17 @@ public class Character : MonoBehaviour
         }
     }
 
+    private void OnTriggerStay2D(Collider2D collision)
+    {
+        if (collision.CompareTag("Water"))
+        {
+            //死亡逻辑，血量清空，音效等
+            curHealth = 0;
+            onHealthChanged?.Invoke(this);
+            onDead?.Invoke();
+        }
+    }
+
     public void TakeDamage(Attack attacker)
     {
         if (isInvulnerable)

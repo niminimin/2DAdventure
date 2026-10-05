@@ -133,18 +133,30 @@ public class Enemy : MonoBehaviour
     //Event
     public void onTakeDamage(Transform attackerTrans)
     {
-        if(transform.position.x - attackerTrans.position.x < 0)
+        // 用攻击者碰撞体的中心算退向，不能用 attackerTrans.position
+        // （Tilemap 的 transform 在网格原点(0,0)，和格子上画在哪无关，
+        //   例如荆棘画在 x=49，transform 却在 0，会让差值恒为正）
+        Vector2 origin = Attack.GetKnockbackOrigin(attackerTrans);
+        float delta = transform.position.x - origin.x;
+
+        if(delta < 0)
         {
             transform.localScale = new Vector3(-1, 1, 1);
         }
-        if(transform.position.x - attackerTrans.position.x >= 0)
+        if(delta >= 0)
         {
             transform.localScale = new Vector3(1, 1, 1);
         }
 
         isWounded = true;
         animator.SetTrigger("Wounded");
-        Vector2 dir = new Vector2(transform.position.x - attackerTrans.position.x, 0).normalized;
+
+        // delta 恰好为 0 时左右无意义：normalized 会给出零向量（击退消失），
+        // Mathf.Sign(0) 又返回 1（固定朝右），所以退化成朝背后推
+        Vector2 dir = Mathf.Abs(delta) < 0.01f
+            ? new Vector2(-faceDir.x, 0)
+            : new Vector2(Mathf.Sign(delta), 0);
+
         rb.velocity = Vector2.zero;
         StartCoroutine(onWounded(dir));
     }
