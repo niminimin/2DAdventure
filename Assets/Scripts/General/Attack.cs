@@ -17,27 +17,29 @@ public class Attack : MonoBehaviour
     }
 
     /// <summary>
-    /// 攻击的几何中心（世界坐标），用来算击退方向。
-    /// 不能用 transform.position：Tilemap 的 transform 永远在网格原点(0,0)，
-    /// 和它上面画的格子无关。荆棘画在 x=49、transform 却在 0，
-    /// 会让 (受害者x - 0) 恒为正 —— 无论从哪边撞都朝右弹。
-    /// 碰撞体 bounds 才反映物体实际的几何范围。
+    /// 攻击者身上「离受害者最近的点」（世界坐标），用来算击退方向。
+    /// 两个都不能用：
+    ///   1. transform.position —— Tilemap 的 transform 永远在网格原点(0,0)，和画的格子无关；
+    ///   2. Collider2D.bounds.center —— 一个 Tilemap 上互不相邻的两组瓦片会被框成一个大包围盒。
+    ///      本项目实例：坑底横排 (19,-18)~(22,-18) 与远处竖柱 (49,-12)~(49,-5)
+    ///      被框成 x 19..50，中心 x=34.5 落在没有任何瓦片的空点上，
+    ///      导致撞竖柱时 (48.65 - 34.5) = +14.15 → 反而被推进刺里。
+    /// ClosestPoint 给的是真实几何上最近的位置，对多段 Tilemap 也成立。
+    /// 另外：若受害者中心已在该碰撞体内部，Unity 会原样返回该点，
+    /// 于是 delta = 0 —— 正好表示「你正站在它上面/里面」。
     /// </summary>
-    public Vector2 KnockbackOrigin
+    public Vector2 ClosestPointTo(Vector2 victimPosition)
     {
-        get
+        // 惰性缓存：Attack 也可能挂在未激活的攻击判定盒上，用 Awake 缓存会漏掉
+        if (!colSearched)
         {
-            // 惰性缓存：Attack 也可能挂在未激活的攻击判定盒上，用 Awake 缓存会漏掉
-            if (!colSearched)
-            {
-                col = GetComponent<Collider2D>();
-                colSearched = true;
-            }
-
-            if (col != null && col.bounds.size.x > 0.001f)
-                return col.bounds.center;
-
-            return transform.position;
+            col = GetComponent<Collider2D>();
+            colSearched = true;
         }
+
+        if (col != null && col.bounds.size.x > 0.001f)
+            return col.ClosestPoint(victimPosition);
+
+        return transform.position;
     }
 }

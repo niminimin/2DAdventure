@@ -133,10 +133,9 @@ public class Enemy : MonoBehaviour
     //Event
     public void onTakeDamage(Attack attacker)
     {
-        // 用攻击者碰撞体的中心算退向，不能用 attacker.transform.position
-        // （Tilemap 的 transform 在网格原点(0,0)，和格子上画在哪无关，
-        //   例如荆棘画在 x=49，transform 却在 0，会让差值恒为正）
-        float delta = transform.position.x - attacker.KnockbackOrigin.x;
+        // 用攻击者身上离自己最近的点算退向，不能用 attacker.transform.position
+        // 也不能用包围盒中心（多段 Tilemap 的中心可能落在空点上）
+        float delta = transform.position.x - attacker.ClosestPointTo(transform.position).x;
 
         if(delta < 0)
         {
