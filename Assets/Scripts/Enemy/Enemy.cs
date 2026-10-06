@@ -131,13 +131,12 @@ public class Enemy : MonoBehaviour
 
     #region Event
     //Event
-    public void onTakeDamage(Transform attackerTrans)
+    public void onTakeDamage(Attack attacker)
     {
-        // 用攻击者碰撞体的中心算退向，不能用 attackerTrans.position
+        // 用攻击者碰撞体的中心算退向，不能用 attacker.transform.position
         // （Tilemap 的 transform 在网格原点(0,0)，和格子上画在哪无关，
         //   例如荆棘画在 x=49，transform 却在 0，会让差值恒为正）
-        Vector2 origin = Attack.GetKnockbackOrigin(attackerTrans);
-        float delta = transform.position.x - origin.x;
+        float delta = transform.position.x - attacker.KnockbackOrigin.x;
 
         if(delta < 0)
         {

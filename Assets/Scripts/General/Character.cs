@@ -16,7 +16,7 @@ public class Character : MonoBehaviour
     private bool isInvulnerable;
 
     public UnityEvent<Character> onHealthChanged;
-    public UnityEvent<Transform> onTakeDamage;
+    public UnityEvent<Attack> onTakeDamage;
     public UnityEvent onDead;
 
     private void Start()
@@ -57,7 +57,7 @@ public class Character : MonoBehaviour
         if(curHealth > 0)
         {
             //执行受伤
-            onTakeDamage?.Invoke(attacker.transform);
+            onTakeDamage?.Invoke(attacker);
             TrigInvulnerable();
         }
         else

@@ -78,15 +78,14 @@ public class PlayerController : MonoBehaviour
     }
 
     #region UnityEvent
-    public void GetWounded(Transform attackerTrans)
+    public void GetWounded(Attack attacker)
     {
         isWounded = true;
         rb.velocity = new Vector2(0, rb.velocity.y);
 
-        // 用攻击者碰撞体的中心算退向，不能用 attackerTrans.position
+        // 用攻击者碰撞体的中心算退向，不能用 attacker.transform.position
         // （荆棘是 Tilemap，transform 在网格原点，实际画在 x=49）
-        Vector2 origin = Attack.GetKnockbackOrigin(attackerTrans);
-        float delta = transform.position.x - origin.x;
+        float delta = transform.position.x - attacker.KnockbackOrigin.x;
 
         // 正好站在攻击者中心线上时 delta 为 0，normalized 会得到零向量 → 退化成朝背后推
         Vector2 dir = Mathf.Abs(delta) < 0.01f
