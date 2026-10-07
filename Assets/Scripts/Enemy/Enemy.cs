@@ -183,10 +183,5 @@ public class Enemy : MonoBehaviour
     {
         Gizmos.DrawWireSphere(transform.position + (Vector3)centerOffset + new Vector3(checkDistance * -transform.localScale.x, 0), 0.2f);
     }
-    public enum EnemyState
-    {
-        Patrol,
-        Chase,
-        Skill
-    }
+
 }

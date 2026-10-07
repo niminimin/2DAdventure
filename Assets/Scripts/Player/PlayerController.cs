@@ -70,9 +70,15 @@ public class PlayerController : MonoBehaviour
     private void Jump(InputAction.CallbackContext context)
     {
         //Debug.Log("jump");
-        if(phyCheck.isGround)
+        if (phyCheck.isGround)
+        {
             rb.AddForce(transform.up * jumpForce, ForceMode2D.Impulse);
+            GetComponent<AudioDefination>()?.PlayAudioClip();
+        }
+            
     }
+
+
     private void PlayerAttack(InputAction.CallbackContext context)
     {
         GetComponent<PlayerAnimation>().PlayerAttack();

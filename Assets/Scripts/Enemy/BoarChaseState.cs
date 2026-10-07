@@ -17,7 +17,7 @@ public class BoarChaseState : BaseState
     {
         if(curEnemy.lostTimeCount >= curEnemy.lostTime)
         {
-            curEnemy.SwitchState(Enemy.EnemyState.Patrol);
+            curEnemy.SwitchState(EnemyState.Patrol);
         }
         if (curEnemy.physicsCheck.touchLedge ||
         (curEnemy.physicsCheck.touchLeftWall && curEnemy.faceDir.x < 0) ||

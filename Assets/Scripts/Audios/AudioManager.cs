@@ -23,7 +23,7 @@ public class AudioManager : MonoBehaviour
     private void OnDisable()
     {
         FXEvent.OnEventRaised -= OnFxEvent;
-        BGMEvent.OnEventRaised += OnBGMEvent;
+        BGMEvent.OnEventRaised -= OnBGMEvent;
     }
 
     private void OnBGMEvent(AudioClip clip)

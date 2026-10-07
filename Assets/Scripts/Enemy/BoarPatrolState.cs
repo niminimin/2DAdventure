@@ -14,7 +14,7 @@ public class BoarPatrolState : BaseState
     {
         if (curEnemy.FoundPlayer())
         {
-            curEnemy.SwitchState(Enemy.EnemyState.Chase);
+            curEnemy.SwitchState(EnemyState.Chase);
         }
         // 等待中：不重新判断条件，避免每帧反复置位导致 isWait / 速度 / 朝向震荡。
         // 解除等待由 Enemy.TimeCounter() 负责。

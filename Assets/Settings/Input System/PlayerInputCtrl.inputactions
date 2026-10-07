@@ -50,6 +50,15 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "Confirm",
+                    "type": "Button",
+                    "id": "ff24afe4-e120-4d88-bcca-24e9c03f24be",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -297,12 +306,34 @@
                 },
                 {
                     "name": "",
+                    "id": "11bf43c7-fd54-4168-a563-6bf7868e23a8",
+                    "path": "<Keyboard>/k",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": ";Keyboard&Mouse",
+                    "action": "Jump",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
                     "id": "c7873ea7-805b-4814-b30b-fe923bacb761",
                     "path": "<Keyboard>/j",
                     "interactions": "",
                     "processors": "",
                     "groups": ";Keyboard&Mouse",
                     "action": "Attack",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "15de2431-e061-411e-a193-84e8fdbe839d",
+                    "path": "<Keyboard>/e",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": ";Keyboard&Mouse",
+                    "action": "Confirm",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }
