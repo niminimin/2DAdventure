@@ -34,5 +34,7 @@ public class Chest : MonoBehaviour, IInteractable
     {
         spriteRenderer.sprite = openSprite;
         isDone = true;
+        // 交互音效属于"开箱"这件事本身，所以由宝箱自己播（组件在 Inspector 里配）。
+        GetComponent<AudioDefination>()?.PlayAudioClip();
     }
 }

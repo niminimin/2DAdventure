@@ -16,6 +16,8 @@ public class AudioDefination : MonoBehaviour
 
     public void PlayAudioClip()
     {
+        if (playAudioEvent == null)
+            return;
         playAudioEvent.RaiseEvent(audioClip);
     }
 }

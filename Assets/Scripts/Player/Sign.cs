@@ -30,7 +30,8 @@ public class Sign : MonoBehaviour
 
         targetItem.TriggerAction();
 
-        GetComponent<AudioDefination>()?.PlayAudioClip();
+        // 音效不在这里统一播 —— 交给被交互物自己：挂 AudioDefination 就响，不挂就静音。
+        // 放在这里播的话，宝箱和传送门只能共用一个音，换场景也会带上开箱音。
 
         
         // 传送门则可能已经把这个场景整个换掉了。

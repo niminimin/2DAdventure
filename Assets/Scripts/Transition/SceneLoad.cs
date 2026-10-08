@@ -14,11 +14,14 @@ public class SceneLoad : MonoBehaviour
     [Header("事件监听")]
     public SceneLoadEventSO sceneLoadEvent;
     public GameSceneSO firstLoadScene;
+    private GameSceneSO curLoadScene;
+    private GameSceneSO sceneToLoad;
 
     [Header("广播")]
     public VoidEventSO afterSceneLoadEvent;
-    private GameSceneSO curLoadScene;
-    private GameSceneSO sceneToLoad;
+    public FadeEventSO fadeEvent;
+
+
     private Vector3 positionToGo;
     private bool fadeScreen;
     private bool isLoading;
@@ -83,7 +86,8 @@ public class SceneLoad : MonoBehaviour
     {
         if (fadeScreen)
         {
-            //TODO 场景淡入淡出
+            //变黑
+            fadeEvent.FadeIn(fadeDuration);
         }
         yield return new WaitForSeconds(fadeDuration);
 
@@ -111,7 +115,8 @@ public class SceneLoad : MonoBehaviour
         playerTrans.position = positionToGo;
         if (fadeScreen)
         {
-            //TODO
+            //变透明
+            fadeEvent.FadeOut(fadeDuration);
         }
         playerTrans.gameObject.SetActive(true);
         isLoading = false;

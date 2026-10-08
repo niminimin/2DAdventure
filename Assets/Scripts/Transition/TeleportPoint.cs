@@ -12,6 +12,8 @@ public class TeleportPoint : MonoBehaviour, IInteractable
 
     public void TriggerAction()
     {
+        // 换图故意不播音效：交互音属于"开箱"这类本地事件，切换场景时响起来很突兀。
+        // 以后想给某个传送门配音，给它挂 AudioDefination 再在这里调 PlayAudioClip() 即可。
         Debug.Log("teleport");
         // 这里接换图逻辑
         loadEventSO.RaiseLoadRequest(sceneToGo, positionToGo, true);

@@ -6200,6 +6200,7 @@ GameObject:
   - component: {fileID: 2004693093}
   - component: {fileID: 2004693095}
   - component: {fileID: 2004693096}
+  - component: {fileID: 2004693097}
   m_Layer: 0
   m_Name: Chest
   m_TagString: Interactable
@@ -6334,6 +6335,21 @@ MonoBehaviour:
   openSprite: {fileID: -637268839, guid: 4d0a2075bd51c2c4f9f59a873ebb3763, type: 3}
   closeSprite: {fileID: 781227420, guid: 4d0a2075bd51c2c4f9f59a873ebb3763, type: 3}
   isDone: 0
+--- !u!114 &2004693097
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2004693091}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3db3391f4e842a545aadab1647daa289, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playAudioEvent: {fileID: 11400000, guid: 568e17d77fbdccb4b8923df11a3475c6, type: 2}
+  audioClip: {fileID: 8300000, guid: 2667a0a008b044e218b63df62e2be749, type: 3}
+  playOnEnable: 0
 --- !u!1 &2039400301
 GameObject:
   m_ObjectHideFlags: 0
