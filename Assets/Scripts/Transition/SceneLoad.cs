@@ -7,12 +7,19 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.ResourceManagement.ResourceProviders;
 using UnityEngine.SceneManagement;
 
-public class SceneLoad : MonoBehaviour
+public class SceneLoad : MonoBehaviour, ISaveable
 {
     public Transform playerTrans;
     public Vector3 initPosition;
+    public Vector3 menuPosition;
     [Header("事件监听")]
     public SceneLoadEventSO sceneLoadEvent;
+    public VoidEventSO newGameEvent;
+    public VoidEventSO loadGameDataEvent;
+    public VoidEventSO backToMenuEvent;
+
+    [Header("场景")]
+    public GameSceneSO menuScene;
     public GameSceneSO firstLoadScene;
     private GameSceneSO curLoadScene;
     private GameSceneSO sceneToLoad;
@@ -37,23 +44,31 @@ public class SceneLoad : MonoBehaviour
     //TODO 应该改成游戏主界面ui
     private void Start()
     {
-        NewGame();
+        //NewGame();
+        LoadMenu();
     }
 
     private void OnEnable()
     {
         sceneLoadEvent.LoadRequestEvent += OnSceneLoadRequest;
+        newGameEvent.OnEventRaised += NewGame;
+        backToMenuEvent.OnEventRaised += LoadMenu;
+        DataManager.instance.RegisterSaveData(this);
     }
 
     private void OnDisable()
     {
         sceneLoadEvent.LoadRequestEvent -= OnSceneLoadRequest;
+        newGameEvent.OnEventRaised -= NewGame;
+        backToMenuEvent.OnEventRaised -= LoadMenu;
+        DataManager.instance.UnRegisterSaveData(this);
     }
 
     private void NewGame()
     {
         sceneToLoad = firstLoadScene;
-        OnSceneLoadRequest(sceneToLoad, initPosition, true);
+        //OnSceneLoadRequest(sceneToLoad, initPosition, true);
+        sceneLoadEvent.RaiseLoadRequest(sceneToLoad, initPosition, true);
     }
 
     /// <summary>
@@ -121,6 +136,33 @@ public class SceneLoad : MonoBehaviour
         playerTrans.gameObject.SetActive(true);
         isLoading = false;
 
-        afterSceneLoadEvent.RaiseEvent();
+        if(curLoadScene.sceneType == SceneType.Location)
+            afterSceneLoadEvent.RaiseEvent();
+    }
+
+    private void LoadMenu()
+    {
+        sceneLoadEvent.RaiseLoadRequest(menuScene, menuPosition, true);
+    }
+
+    public DataDifination GetDataID()
+    {
+        return GetComponent<DataDifination>();
+    }
+
+    public void GetSaveData(Data data)
+    {
+        data.SaveGameScene(curLoadScene);
+    }
+
+    public void LoadData(Data data)
+    {
+        var playerID = playerTrans.gameObject.GetComponent<DataDifination>().ID;
+        if (data.characterPositionDictionary.ContainsKey(playerID))
+        {
+            positionToGo = data.characterPositionDictionary[playerID];
+            sceneToLoad = data.GetSavedScene();
+        }
+        OnSceneLoadRequest(sceneToLoad, positionToGo, true);
     }
 }

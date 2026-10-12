@@ -6,6 +6,13 @@ using UnityEngine.InputSystem;
 
 public class PlayerController : MonoBehaviour
 {
+    [Header("事件监听")]
+    public SceneLoadEventSO sceneLoadEvent;
+    public VoidEventSO afterSceneLoadEvent;
+    public VoidEventSO newGameEvent;
+    public VoidEventSO loadGameEvent;
+    public VoidEventSO backToMenuEvent;
+
     public PlayerInputCtrl inputControl;
     private Rigidbody2D rb;
     private PhysicsCheck phyCheck;
@@ -35,12 +42,23 @@ public class PlayerController : MonoBehaviour
     private void OnEnable()
     {
         inputControl.Enable();
+        sceneLoadEvent.LoadRequestEvent += OnLoadEvent;
+        afterSceneLoadEvent.OnEventRaised += OnAfterSceneLoadEvent;
+        newGameEvent.OnEventRaised += PlayerInit;
+        loadGameEvent.OnEventRaised += PlayerInit;
+        backToMenuEvent.OnEventRaised += PlayerInitInMenu;
     }
 
     private void OnDisable()
     {
         inputControl.Disable();
+        sceneLoadEvent.LoadRequestEvent -= OnLoadEvent;
+        afterSceneLoadEvent.OnEventRaised -= OnAfterSceneLoadEvent;
+        newGameEvent.OnEventRaised -= PlayerInit;
+        loadGameEvent.OnEventRaised -= PlayerInit;
+        backToMenuEvent.OnEventRaised -= PlayerInitInMenu;
     }
+
 
     private void Update()
     {
@@ -121,6 +139,48 @@ public class PlayerController : MonoBehaviour
         isDead = true;
         inputControl.GamePlay.Disable();
     }
+
+    public void PlayerInit()
+    {
+        isDead = false;
+        isWounded = false;      // 不清掉的话 FixedUpdate 里 move() 永远被 if(!isWounded) 锁住
+        inputControl.GamePlay.Enable();
+
+        // 回满血并广播给 UI。不做这一步, 复活后 curHealth 还是 0:
+        // 血条停在空、下一帧再挨一下就直接又死。
+        Character character = GetComponent<Character>();
+        character.NewGame();            // 内部会把 isInvulnerable 清掉, 所以必须在下一行之前
+        character.TrigInvulnerable();   // 复活后短暂无敌，防止刚站起来又被秒
+    }
+
+    private void PlayerInitInMenu()
+    {
+        PlayerInit();
+        inputControl.GamePlay.Disable();
+    }
+
+    /// <summary>
+    /// 场景加载事件触发
+    /// 加载过程中人物控制失效
+    /// </summary>
+    /// <param name="arg0"></param>
+    /// <param name="arg1"></param>
+    /// <param name="arg2"></param>
+    /// <exception cref="NotImplementedException"></exception>
+    private void OnLoadEvent(GameSceneSO arg0, Vector3 arg1, bool arg2)
+    {
+        inputControl.GamePlay.Disable();
+    }
+
+    /// <summary>
+    /// 加载场景完成后事件触发
+    /// 人物控制生效
+    /// </summary>
+    private void OnAfterSceneLoadEvent()
+    {
+        inputControl.GamePlay.Enable();
+    }
+
     #endregion
 
 

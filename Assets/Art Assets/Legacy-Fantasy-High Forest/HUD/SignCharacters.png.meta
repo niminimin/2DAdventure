@@ -3,7 +3,7 @@ guid: 9e10cb8950749fc499ae002b2ffe8d7d
 TextureImporter:
   internalIDToNameTable: []
   externalObjects: {}
-  serializedVersion: 12
+  serializedVersion: 13
   mipmaps:
     mipMapMode: 0
     enableMipMap: 0
@@ -220,7 +220,7 @@ TextureImporter:
       edges: []
       weights: []
     - serializedVersion: 2
-      name: SignCharacters_4
+      name: SignDark
       rect:
         serializedVersion: 2
         x: 70
@@ -409,7 +409,7 @@ TextureImporter:
       edges: []
       weights: []
     - serializedVersion: 2
-      name: SignCharacters_13
+      name: SignLight
       rect:
         serializedVersion: 2
         x: 214
@@ -1663,7 +1663,6 @@ TextureImporter:
       SignCharacters_10: 170222007
       SignCharacters_11: -177518158
       SignCharacters_12: -1522457301
-      SignCharacters_13: 1743164075
       SignCharacters_14: -1632758665
       SignCharacters_15: 2029822747
       SignCharacters_16: 318083956
@@ -1692,7 +1691,6 @@ TextureImporter:
       SignCharacters_37: -1061555341
       SignCharacters_38: 1749643127
       SignCharacters_39: 1165674099
-      SignCharacters_4: 383887719
       SignCharacters_40: -693916805
       SignCharacters_41: -1552376860
       SignCharacters_43: 1707016052
@@ -1730,6 +1728,8 @@ TextureImporter:
       SignCharacters_9: 1002446626
       SignCharacters_M_Dark: -137681469
       SignCharacters_M_Light: -894611761
+      SignDark: 383887719
+      SignLight: 1743164075
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
