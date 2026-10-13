@@ -24,6 +24,18 @@ public class Sign : MonoBehaviour
         playerInput.GamePlay.Confirm.started += OnConfirm;
     }
 
+    private void OnDisable()
+    {
+        // 必须和 OnEnable 配对退订。Sign 挂在 Player 层级下, 而 SceneLoad 切场景时会
+        // playerTrans.SetActive(false) / (true) —— 每次都会跑一遍 OnDisable/OnEnable。
+        // 不退订的话每切一次场景就多一条订阅, 之后按一次 E 会调 OnConfirm 多次。
+        playerInput.GamePlay.Confirm.started -= OnConfirm;
+
+        // Awake 里 Enable 了整个 action asset, 这里必须 Disable, 否则对象被回收时
+        // Input System 会报 "GamePlay.Disable() has not been called" 的泄漏断言。
+        playerInput.Disable();
+    }
+
     private void OnConfirm(InputAction.CallbackContext context)
     {
         if (!canPress) return;

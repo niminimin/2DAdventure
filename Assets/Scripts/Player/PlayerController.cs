@@ -41,7 +41,17 @@ public class PlayerController : MonoBehaviour
 
     private void OnEnable()
     {
-        inputControl.Enable();
+        // 这里【绝对不能】inputControl.Enable()。
+        //
+        // SceneLoad 切场景时会 playerTrans.SetActive(false) 再 SetActive(true)
+        // (SceneLoad.cs:111 和 :136), 每次重新激活都会跑一遍 OnEnable。
+        // 无条件 Enable 会把菜单场景里刚关掉的 GamePlay 又打开 ——
+        // 症状就是"死亡后返回菜单, 人物还能动", 而直接启动游戏进菜单却没事
+        // (因为启动时 curLoadScene == null, 直接 LoadNewScene, 没有 SetActive 循环)。
+        //
+        // 输入的开/关统一由"目标场景是不是 Location"决定, 见下面两个回调:
+        //   OnLoadEvent           任何加载请求 -> 先关
+        //   OnAfterSceneLoadEvent 只有 Location 场景加载完成才开
         sceneLoadEvent.LoadRequestEvent += OnLoadEvent;
         afterSceneLoadEvent.OnEventRaised += OnAfterSceneLoadEvent;
         newGameEvent.OnEventRaised += PlayerInit;
