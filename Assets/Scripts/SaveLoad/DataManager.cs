@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -15,6 +16,22 @@ public class DataManager : MonoBehaviour
 
     private List<ISaveable> saveableList = new List<ISaveable>();
     private Data saveData;
+
+    /// <summary>
+    /// 存档文件路径。Application.persistentDataPath 是各平台统一的可写且持久目录
+    /// (Windows 下是 %USERPROFILE%\AppData\LocalLow\&lt;公司名&gt;\&lt;产品名&gt;)。
+    /// 注意: 改 Player Settings 里的 Company Name / Product Name 会改变这个路径,
+    /// 旧存档会因此"找不到"。
+    /// </summary>
+    public string SavePath
+    {
+        get { return Path.Combine(Application.persistentDataPath, "save.json"); }
+    }
+
+    public bool HasSaveFile
+    {
+        get { return File.Exists(SavePath); }
+    }
 
     private void Awake()
     {
@@ -51,10 +68,10 @@ public class DataManager : MonoBehaviour
 
     private void Update()
     {
-        if (Keyboard.current.lKey.wasPressedThisFrame)
-        {
-            Load();
-        }
+        //if (Keyboard.current.lKey.wasPressedThisFrame)
+        //{
+        //    Load();
+        //}
     }
 
     public void RegisterSaveData(ISaveable saveable)
@@ -71,25 +88,56 @@ public class DataManager : MonoBehaviour
     }
     public void Save()
     {
+        // 1) 让所有 saveable 把当前状态写进 saveData。
+        //    各 GetSaveData 内部都是"key 存在就赋值、不存在才 Add", 所以同一对象
+        //    每次都是覆盖自己那条记录, 不会重复追加。
         foreach(var saveable in  saveableList)
         {
             saveable.GetSaveData(saveData);
         }
 
-        foreach (var item in saveData.characterPositionDictionary)
+        // 2) 整体序列化落盘。
+        //    File.WriteAllText 会【覆盖】同名文件 —— 每次存档都是完整重写, 不是追加。
+        //    Data 里的字典由 Data.OnBeforeSerialize 摊平成影子列表后才进 JSON。
+        try
         {
-            Debug.Log(item.Key + " " + item.Value);
+            string dir = Path.GetDirectoryName(SavePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            File.WriteAllText(SavePath, JsonUtility.ToJson(saveData));
+            Debug.Log("存档已写入: " + SavePath
+                + "  (位置 " + saveData.characterPositionDictionary.Count
+                + " 条, 血量 " + saveData.characterHealthDictionary.Count
+                + " 条, 交互 " + saveData.interactHasTriggered.Count + " 条)");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("存档写入失败: " + e.Message);
         }
     }
 
     public void Load()
     {
-        // 还没存过档(没碰过存档点) —— "返回上一个存档点" 退化成"从游戏开头重来"。
-        // sceneToSave 由 SceneLoad.GetSaveData() 在保存那一刻写入, 是"有没有存档"的判据。
-        if (saveData == null || string.IsNullOrEmpty(saveData.sceneToSave))
+        // 没有存档文件 —— "返回上一个存档点" / "继续" 退化成"从游戏开头重来"。
+        if (!HasSaveFile)
         {
-            if (newGameEventSO != null)
-                newGameEventSO.RaiseEvent();
+            FallbackToNewGame();
+            return;
+        }
+
+        try
+        {
+            // FromJsonOverwrite 填进【已存在的】saveData 实例, 内部会自动调用
+            // Data.OnAfterDeserialize 把影子列表装回字典。
+            JsonUtility.FromJsonOverwrite(File.ReadAllText(SavePath), saveData);
+        }
+        catch (Exception e)
+        {
+            // 存档损坏 / 被手改坏 —— 当作没有存档, 而不是让整个游戏崩在这一步
+            Debug.LogError("存档读取失败, 按没有存档处理: " + e.Message);
+            saveData = new Data();
+            FallbackToNewGame();
             return;
         }
 
@@ -97,6 +145,12 @@ public class DataManager : MonoBehaviour
         {
             saveable.LoadData(saveData);
         }
+    }
+
+    private void FallbackToNewGame()
+    {
+        if (newGameEventSO != null)
+            newGameEventSO.RaiseEvent();
     }
 
     /// <summary>

@@ -17,10 +17,16 @@ public class Sign : MonoBehaviour
     {
         animator = signSprite.GetComponent<Animator>();
         playerInput = new PlayerInputCtrl();
-        playerInput.Enable();
+        // 这里【只创建, 不 Enable】——
+        // Enable/Disable 必须成对放在 OnEnable/OnDisable 里。
+        // 如果 Awake 里 Enable、OnDisable 里 Disable, 就是不对称的:
+        // Sign 挂在 Player 层级下, SceneLoad 切场景时会 SetActive(false)/SetActive(true),
+        // OnDisable 关掉之后 OnEnable 不会再打开 -> 进关卡后 E 键彻底失效。
     }
+
     private void OnEnable()
     {
+        playerInput.Enable();
         playerInput.GamePlay.Confirm.started += OnConfirm;
     }
 
@@ -31,7 +37,7 @@ public class Sign : MonoBehaviour
         // 不退订的话每切一次场景就多一条订阅, 之后按一次 E 会调 OnConfirm 多次。
         playerInput.GamePlay.Confirm.started -= OnConfirm;
 
-        // Awake 里 Enable 了整个 action asset, 这里必须 Disable, 否则对象被回收时
+        // 和上面 OnEnable 里的 Enable() 配对, 否则对象被回收时
         // Input System 会报 "GamePlay.Disable() has not been called" 的泄漏断言。
         playerInput.Disable();
     }

@@ -54,9 +54,12 @@ public class PlayerController : MonoBehaviour
         //   OnAfterSceneLoadEvent 只有 Location 场景加载完成才开
         sceneLoadEvent.LoadRequestEvent += OnLoadEvent;
         afterSceneLoadEvent.OnEventRaised += OnAfterSceneLoadEvent;
-        newGameEvent.OnEventRaised += PlayerInit;
-        loadGameEvent.OnEventRaised += PlayerInit;
-        backToMenuEvent.OnEventRaised += PlayerInitInMenu;
+        // 这三条路径的语义是【不一样】的, 不能共用一个处理函数:
+        //   新游戏 / 回菜单 -> 复位状态 + 回满血
+        //   读档            -> 只复位状态, 血量必须保留存档里的值
+        newGameEvent.OnEventRaised += PlayerInit;           // 回满血
+        loadGameEvent.OnEventRaised += PlayerRevive;        // 不碰血量
+        backToMenuEvent.OnEventRaised += PlayerInitInMenu;  // 回满血
     }
 
     private void OnDisable()
@@ -65,7 +68,7 @@ public class PlayerController : MonoBehaviour
         sceneLoadEvent.LoadRequestEvent -= OnLoadEvent;
         afterSceneLoadEvent.OnEventRaised -= OnAfterSceneLoadEvent;
         newGameEvent.OnEventRaised -= PlayerInit;
-        loadGameEvent.OnEventRaised -= PlayerInit;
+        loadGameEvent.OnEventRaised -= PlayerRevive;
         backToMenuEvent.OnEventRaised -= PlayerInitInMenu;
     }
 
@@ -150,17 +153,39 @@ public class PlayerController : MonoBehaviour
         inputControl.GamePlay.Disable();
     }
 
+    /// <summary>新游戏 / 回菜单: 复位状态 + 回满血。</summary>
     public void PlayerInit()
     {
-        isDead = false;
-        isWounded = false;      // 不清掉的话 FixedUpdate 里 move() 永远被 if(!isWounded) 锁住
-        inputControl.GamePlay.Enable();
+        PlayerRevive();
 
         // 回满血并广播给 UI。不做这一步, 复活后 curHealth 还是 0:
         // 血条停在空、下一帧再挨一下就直接又死。
         Character character = GetComponent<Character>();
         character.NewGame();            // 内部会把 isInvulnerable 清掉, 所以必须在下一行之前
         character.TrigInvulnerable();   // 复活后短暂无敌，防止刚站起来又被秒
+    }
+
+    /// <summary>
+    /// 【读档专用】只复位状态开关, 绝不动血量。
+    ///
+    /// 症状: 读档后 curHealth 永远是 maxHealth(100), 存进去的 90 读不出来。
+    /// 原因: 原来 loadGameEvent 直接连着 PlayerInit, 而 PlayerInit 里的
+    ///       character.NewGame() 会把 curHealth 直接写成 maxHealth ——
+    ///       Character.LoadData 刚恢复的 90 立刻被覆盖掉。
+    ///
+    /// 这里有一条【隐式执行顺序】依赖, 改动前请先看懂:
+    ///   DataManager 标了 [DefaultExecutionOrder(-100)], 它的 OnEnable 先跑,
+    ///   所以同一个 LoadGameEventSO 的委托链上 DataManager.Load 排在
+    ///   本函数前面 —— 必须先 LoadData 恢复, 再进来复位状态。
+    /// </summary>
+    private void PlayerRevive()
+    {
+        isDead = false;
+        isWounded = false;      // 不清掉的话 FixedUpdate 里 move() 永远被 if(!isWounded) 锁住
+        inputControl.GamePlay.Enable();
+
+        // 只补无敌帧, 不碰 curHealth
+        GetComponent<Character>().TrigInvulnerable();
     }
 
     private void PlayerInitInMenu()

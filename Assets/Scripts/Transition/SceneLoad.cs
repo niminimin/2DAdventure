@@ -163,6 +163,12 @@ public class SceneLoad : MonoBehaviour, ISaveable
             positionToGo = data.characterPositionDictionary[playerID];
             sceneToLoad = data.GetSavedScene();
         }
-        OnSceneLoadRequest(sceneToLoad, positionToGo, true);
+        // 必须走事件广播, 不能直接调 OnSceneLoadRequest()。
+        // 直接调等于只执行了 SceneLoad 自己的那段逻辑, 而挂在同一个事件上的
+        // 另外两个订阅者根本收不到通知:
+        //   UIManager        -> 进菜单时 PlayerStateBar 被 SetActive(false),
+        //                       读档进关卡后没人再打开它(血条整个不见了)
+        //   PlayerController -> 过渡期间不会关掉 GamePlay 输入
+        sceneLoadEvent.RaiseLoadRequest(sceneToLoad, positionToGo, true);
     }
 }

@@ -34,6 +34,17 @@ public class Character : MonoBehaviour, ISaveable
     private void Start()
     {
         NewGame();
+
+        // 场景加载出来时, 对象身上带的只是编辑器里的默认值 —— 敌人的血量永远是满的。
+        // 必须主动把存档里属于自己的记录(位置 + 血量)拉回来。
+        // SavePoint 也是这个套路, 见 SavePoint.OnEnable。
+        //
+        // 【为什么是 Start 而不是 OnEnable】
+        // Start 每个实例只跑一次; 而 Player 每次切场景都会被
+        // SceneLoad 的 SetActive(false)/(true) 再触发一次 OnEnable
+        // (SceneLoad.cs:111 和 :136)。放在 OnEnable 的话, 你走进新场景后
+        // 会被传送回上一个存档点, 并且血量退回存档值(中途受的伤白受)。
+        DataManager.instance.LoadFor(this);
     }
 
     private void OnEnable()
@@ -133,11 +144,11 @@ public class Character : MonoBehaviour, ISaveable
 
         onHealthChanged?.Invoke(this);
 
-        PlayerController pc = GetComponent<PlayerController>();
-        if (pc != null)
-        {
-            pc.isDead = false;
-            pc.inputControl.GamePlay.Enable();
-        }
+        // 这里【不碰 PlayerController】。
+        // 复活(清 isDead / 开 GamePlay 输入)是 PlayerController 自己的职责,
+        // 由 PlayerRevive() 挂在 loadGameEvent 上完成。
+        // 原来这里会 GamePlay.Enable(), 而现在 LoadData 也会被 Start() 调用
+        // (出生时拉存档) —— 那一句会在菜单场景里把移动输入打开,
+        // 就是之前修过的"菜单里能走动"。
     }
 }
