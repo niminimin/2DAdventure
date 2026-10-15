@@ -144,16 +144,18 @@ public class Character : MonoBehaviour, ISaveable
 
     public void GetSaveData(Data data)
     {
-        if (data.characterPositionDictionary.ContainsKey(GetDataID().ID))
-        {
-            data.characterPositionDictionary[GetDataID().ID] = transform.position;
-            data.characterHealthDictionary[GetDataID().ID] = curHealth;
-        }
-        else
-        {
-            data.characterPositionDictionary.Add(GetDataID().ID, transform.position);
-            data.characterHealthDictionary.Add(GetDataID().ID, curHealth);
-        }
+        string id = GetDataID().ID;
+
+        // 用【索引器】(存在则覆盖、不存在则新增)，不要用 ContainsKey + Add。
+        //
+        // 原来的写法只检查 characterPositionDictionary，却在 else 分支里【同时 Add 两个字典】——
+        // 只要这两个字典不同步就会撞键，而它们确实会不同步：
+        // MarkCharacterHealth() 只写血量、不写位置（打伤敌人时）。
+        //
+        // 症状：打伤野猪后去存档 → 抛 "An item with the same key has already been added"。
+        // 而且因为 Save() 的 foreach 在 try 之外，这个异常会让【整个存档都没写盘】。
+        data.characterPositionDictionary[id] = transform.position;
+        data.characterHealthDictionary[id] = curHealth;
     }
 
     public void LoadData(Data data)

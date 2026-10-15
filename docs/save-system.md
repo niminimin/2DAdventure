@@ -318,7 +318,7 @@ private void RecordHealth()
 
 ---
 
-## 五、🔴 三个必须知道的坑
+## 五、🔴 四个必须知道的坑
 
 ### 坑 1：`JsonUtility` 完全不支持 `Dictionary`
 
@@ -366,6 +366,60 @@ private void OnValidate()
 
 - 目前 `Cave.unity` 只有 **1 只**野猪，所以没暴露
 - 以后从同一个 prefab 再加敌人时**必须处理**（见 issue #5）
+
+### 坑 4：`if` 查一个字典、`else` 写两个字典 —— 字典一旦不同步就撞键
+
+原来的 `Character.GetSaveData()`：
+
+```csharp
+if (data.characterPositionDictionary.ContainsKey(id))   // ← 只查 position
+{
+    data.characterPositionDictionary[id] = transform.position;
+    data.characterHealthDictionary[id]   = curHealth;
+}
+else
+{
+    data.characterPositionDictionary.Add(id, transform.position);
+    data.characterHealthDictionary.Add(id, curHealth);   // ← health 里可能已经有这条 → 💥
+}
+```
+
+**它隐含假设「两个字典永远同步」**。这个假设原本成立（两者只在 `GetSaveData` 里一起写），
+但一旦有别的入口单独写其中一个（比如 `MarkCharacterHealth()` 只写血量），就会炸：
+
+```
+打伤野猪 → characterHealthDictionary[boarID] = 30   （position 里没有）
+  → 存档点按 E → Save() → 野猪的 GetSaveData
+    → position 里没有 key  → 走 else
+      → health.Add(同一个 key) → ArgumentException
+```
+
+**修法**：用**索引器**（存在则覆盖、不存在则新增），根本不需要分支：
+
+```csharp
+data.characterPositionDictionary[id] = transform.position;
+data.characterHealthDictionary[id]   = curHealth;
+```
+
+#### 连带后果：整个存档**完全没写盘**
+
+这个 bug 的真正杀伤面不在报错本身。看 `Save()` 的结构：
+
+```csharp
+foreach (var saveable in saveableList)
+    saveable.GetSaveData(saveData);        // ← 循环在 try 【之外】
+
+try { File.WriteAllText(SavePath, ...); }  // ← 上面一抛，这里根本不会执行
+catch (Exception e) { ... }
+```
+
+异常一抛 → 后面的对象不再保存 → **`File.WriteAllText` 不执行 → 存档文件没被更新**。
+玩家只看到控制台一行报错，还以为"存过了"。
+
+**已顺带加固**：循环里逐个 `try/catch`，单个对象出错不再拖垮整次存档。
+
+> **教训**：多个字典用同一个条件判断时，必须保证它们**永远同生共死**；
+> 只要引入一个"只写其中一个"的入口，这个写法就从"能工作"变成"定时炸弹"。
 
 ---
 

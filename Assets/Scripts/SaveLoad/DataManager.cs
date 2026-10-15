@@ -89,11 +89,24 @@ public class DataManager : MonoBehaviour
     public void Save()
     {
         // 1) 让所有 saveable 把当前状态写进 saveData。
-        //    各 GetSaveData 内部都是"key 存在就赋值、不存在才 Add", 所以同一对象
-        //    每次都是覆盖自己那条记录, 不会重复追加。
+        //
+        //    逐个 try/catch：【单个对象出错不该让整个存档失败】。
+        //    这段循环在下面的 try 之外 —— 原来只要任何一次 GetSaveData 抛异常，
+        //    后面的对象全部不再保存，而且 File.WriteAllText 根本不会执行，
+        //    存档【完全没写盘】。玩家只看到控制台一行报错，还以为"存过了"。
         foreach(var saveable in  saveableList)
         {
-            saveable.GetSaveData(saveData);
+            try
+            {
+                saveable.GetSaveData(saveData);
+            }
+            catch (Exception e)
+            {
+                UnityEngine.Object obj = saveable as UnityEngine.Object;
+                Debug.LogError("[存档] 跳过一个出错的存档对象"
+                    + (obj != null ? "（" + obj.name + "）" : "")
+                    + ": " + e.Message, obj);
+            }
         }
 
         // 2) 整体序列化落盘。
