@@ -41,6 +41,7 @@
 | 墙到头（不再 `touchWall`） | 回到普通下落 |
 | 按跳跃键 | **蹬墙跳** |
 | 受伤 / 死亡 | 强制脱离 |
+| **按攻击键** | **被忽略** —— 扒墙时禁止攻击（原因见第六节「坑 4」） |
 
 ### 扒墙中每帧行为
 
@@ -90,7 +91,7 @@ wallJumpXForce(8) × wallJumpLockTime(0.2) = 1.6 单位分离距离
 
 | 文件 | 改动 |
 |---|---|
-| `Assets/Scripts/Player/PlayerController.cs` | 新增 4 个参数 + `isWallSliding` 状态；新增 `UpdateWallSlide()`、`WallJump()`；改 `FixedUpdate()`、`Jump()`、`PlayerRevive()` |
+| `Assets/Scripts/Player/PlayerController.cs` | 新增 4 个参数 + `isWallSliding` 状态；新增 `UpdateWallSlide()`、`WallJump()`；改 `FixedUpdate()`、`Jump()`、`PlayerAttack()`、`PlayerRevive()` |
 | `Assets/Scripts/Player/PlayerAnimation.cs` | `SetAnimation()` 加一行喂 `isWallSlide` 给 Animator |
 | `Assets/Animations/Player/BlueWallSlide.anim` | **新建**：4 帧循环，`frameRate=8`，`length=0.5s` |
 | `Assets/Animations/Player/PlayerAnimator.controller` | 新增参数 + 状态 + 3 条转场；**并修正了原有的 `ANY -> Jump`** |
@@ -129,7 +130,7 @@ ANY ──[isGround=false && isWallSlide=false]──▶ Jump    ← 关键修�
 
 ---
 
-## 六、🔴 三个必须知道的坑（都是实际踩过的）
+## 六、🔴 四个必须知道的坑（都是实际踩过的）
 
 ### 坑 1：`move()` 每帧无条件覆写 `velocity.x` → 必须有输入锁定
 
@@ -184,6 +185,63 @@ ANY -> Jump   [isGround = IfNot, isWallSlide = IfNot]
 > 为什么原来和 `BlueLand` 不冲突？因为 `BlueLand` 是在 `isGround == true` 时进入的，
 > AnyState 的 `isGround = IfNot` 自然为假，不会打架。扒墙状态没有这个「天然豁免」。
 
+### 坑 4：扒墙时仍能攻击，攻击动画会把扒墙整个盖掉
+
+**症状**：扒在墙上按 **J**，人物立刻切成攻击动画，但**身体还在贴墙往下滑**。
+
+**两个原因叠加**：
+
+**① 代码层** —— `PlayerAttack()` 原本没有任何状态守卫：
+
+```csharp
+private void PlayerAttack(InputAction.CallbackContext context)
+{
+    GetComponent<PlayerAnimation>().PlayerAttack();   // animator.SetTrigger("attack")
+    isAttack = true;
+}
+```
+
+对比 `Jump()` 是有守卫的（`if (isGround) ... else if (isWallSliding)`），攻击这条路径漏了。
+
+**② 动画层** —— Attack Layer 是 **weight=1 / Override / `mask = null`** 的全身层：
+
+| Layer | 名称 | Weight | Avatar Mask | Blending |
+|---|---|---|---|---|
+| 0 | Base Layer | 基础层 | null | Override |
+| 1 | Wound Layer | 1 | null | Override |
+| 2 | **Attack Layer** | 1 | **null** | Override |
+
+Mask 为空 → 一进攻击状态就**整个人物姿势被替换**，Base Layer 的 `BlueWallSlide` 直接被盖掉。
+
+> ⚠️ **不要试图用 Avatar Mask 做「只盖上半身」** —— 在纯 Sprite 2D 里这行不通。
+> Avatar Mask 只能遮罩骨骼 / Transform 层级，而这里动画曲线直接改 `SpriteRenderer.m_Sprite`（`classID: 212`），
+> Mask 对这类曲线没有任何作用。
+
+**③ 附带后果：物理与动画不一致**
+
+`UpdateWallSlide()` 的守卫是 `isGround || isWounded || isDead`，**没有 `isAttack`**。
+所以攻击期间物理上仍在扒墙下滑，等攻击播完、人还挂在墙上时，动画会突然从攻击切回扒墙，看起来很跳。
+
+**修复（已实施）**：
+
+```csharp
+private void PlayerAttack(InputAction.CallbackContext context)
+{
+    if (isWallSliding) return;     // 扒着墙，腾不出手
+    GetComponent<PlayerAnimation>().PlayerAttack();
+    isAttack = true;
+}
+```
+
+**外加一道 Animator 保险** —— Attack Layer 的进入转场加 `isWallSlide = IfNot`：
+
+```yaml
+Attack Layer:  New State -> PlayerAttack1  [isAttack=If, attack=If, isWallSlide=IfNot]
+```
+
+> **不能只靠 Animator 保险**：那样 `isAttack` 永远不会被 `AttackBehaviour.OnStateExit()` 复位，
+> 会一直卡在 `true`，等人离开墙的瞬间突然触发一次攻击。
+
 ---
 
 ## 七、调参指南
@@ -236,4 +294,6 @@ ANY -> Jump   [isGround = IfNot, isWallSlide = IfNot]
 | `BlueWallSlide.anim` | `frameRate=8`、`length=0.5`、`isLooping=True`、4 帧顺序正确 |
 | Animator 参数 | `isWallSlide(Bool)` 已存在 |
 | Animator 状态 | `BlueWallSlide` motion 已绑定 |
-| 转场 | 4 条全部就位（含 `ANY -> Jump` 修正） |
+| Base Layer 转场 | 4 条全部就位（含 `ANY -> Jump` 修正） |
+| Attack Layer 保险 | `New State -> PlayerAttack1 [isAttack=If, attack=If, isWallSlide=IfNot]` |
+| 扒墙时攻击 | 代码守卫 `if (isWallSliding) return;` 已加 |

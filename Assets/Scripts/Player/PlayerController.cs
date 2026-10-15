@@ -199,6 +199,18 @@ public class PlayerController : MonoBehaviour
 
     private void PlayerAttack(InputAction.CallbackContext context)
     {
+        // 扒墙时禁止攻击 —— 手抓着墙腾不出手。
+        //
+        // 不拦的话会出问题：Attack Layer 是 weight=1 / Override / 【没有 Avatar Mask】的
+        // 全身层，一进攻击状态就把 Base Layer 的 BlueWallSlide 整个盖掉（2D 纯 Sprite 动画
+        // 没法用 Avatar Mask 只遮上半身，Mask 只对骨骼/Transform 层级有效，管不了 m_Sprite 曲线）。
+        // 更糟的是 UpdateWallSlide() 的守卫里没有 isAttack，物理上仍在扒墙下滑，
+        // 于是变成"一边挥刀一边贴墙下滑"，动画和物理对不上。
+        //
+        // Animator 的 Attack Layer 里还有一道 isWallSlide=IfNot 的转场保险，
+        // 但【不能只靠它】：那样 isAttack 永远不会被 AttackBehaviour.OnStateExit 复位。
+        if (isWallSliding) return;
+
         GetComponent<PlayerAnimation>().PlayerAttack();
         isAttack = true;
     }
