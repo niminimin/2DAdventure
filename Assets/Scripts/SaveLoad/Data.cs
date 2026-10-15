@@ -25,6 +25,11 @@ public class Data : ISerializationCallbackReceiver
     public Dictionary<string, Vector3> characterPositionDictionary = new Dictionary<string, Vector3>();
     public Dictionary<string, float> characterHealthDictionary = new Dictionary<string, float>();
     public Dictionary<string, bool> interactHasTriggered = new Dictionary<string, bool>();
+    /// <summary>
+    /// 已死亡的敌人。把野猪当 Boss 处理 —— 它死了就不该再被重建。
+    /// 注意：Character 那边照常保存敌人的位置和血量，这里【只额外记死亡】。
+    /// </summary>
+    public Dictionary<string, bool> deadEnemies = new Dictionary<string, bool>();
 
     // ---------------- 给 JsonUtility 看的影子列表 ----------------
     [SerializeField] private List<string> positionKeys = new List<string>();
@@ -33,6 +38,8 @@ public class Data : ISerializationCallbackReceiver
     [SerializeField] private List<float> healthValues = new List<float>();
     [SerializeField] private List<string> interactKeys = new List<string>();
     [SerializeField] private List<bool> interactValues = new List<bool>();
+    [SerializeField] private List<string> deadKeys = new List<string>();
+    [SerializeField] private List<bool> deadValues = new List<bool>();
 
     public void OnBeforeSerialize()
     {
@@ -61,6 +68,14 @@ public class Data : ISerializationCallbackReceiver
             interactKeys.Add(kv.Key);
             interactValues.Add(kv.Value);
         }
+
+        deadKeys.Clear();
+        deadValues.Clear();
+        foreach (KeyValuePair<string, bool> kv in deadEnemies)
+        {
+            deadKeys.Add(kv.Key);
+            deadValues.Add(kv.Value);
+        }
     }
 
     public void OnAfterDeserialize()
@@ -80,6 +95,11 @@ public class Data : ISerializationCallbackReceiver
         int flagCount = Mathf.Min(interactKeys.Count, interactValues.Count);
         for (int i = 0; i < flagCount; i++)
             interactHasTriggered[interactKeys[i]] = interactValues[i];
+
+        deadEnemies.Clear();
+        int deadCount = Mathf.Min(deadKeys.Count, deadValues.Count);
+        for (int i = 0; i < deadCount; i++)
+            deadEnemies[deadKeys[i]] = deadValues[i];
     }
 
     public void SaveGameScene(GameSceneSO saveScene)

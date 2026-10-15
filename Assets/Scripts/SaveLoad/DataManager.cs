@@ -154,6 +154,27 @@ public class DataManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 登记一个已死亡的敌人（把野猪当 Boss：死了就不再重建）。
+    ///
+    /// 只写进【内存里的 saveData】，落盘要等下一次 Save()（碰存档点）。
+    /// 这是刻意与存档系统保持一致的语义：
+    ///   打死野猪 → 换场景回来 → 它不会复活（内存里记着）
+    ///   打死野猪后【没存档】就死了 → 读档 → 它还在（存档里没这条记录）
+    /// </summary>
+    public void MarkEnemyDead(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        saveData.deadEnemies[id] = true;
+    }
+
+    public bool IsEnemyDead(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return false;
+        bool dead;
+        return saveData.deadEnemies.TryGetValue(id, out dead) && dead;
+    }
+
+    /// <summary>
     /// 只把存档数据套用给一个对象（不是全部）。
     /// 场景卸载重载后，新出来的对象靠这个把自己恢复成存档里的状态 ——
     /// 否则它只能拿到场景文件里序列化的默认值。

@@ -39,6 +39,22 @@ public class Enemy : MonoBehaviour
         animator = GetComponent<Animator>();
         rb = GetComponent<Rigidbody2D>();
         physicsCheck = GetComponent<PhysicsCheck>();
+
+        // 把野猪当 Boss：存档里记着它已经死了 → 直接销毁，不让它出现在场景里。
+        //
+        // 放在 Awake 而不是 Start，是为了避免"闪一帧" —— 对象一被实例化就销毁，
+        // 不会先渲染出来再消失。
+        //
+        // 两条路径下 saveData 在场景实例化时都已就绪：
+        //   普通切场景 —— saveData 一直在内存里
+        //   读档       —— DataManager 标了 [DefaultExecutionOrder(-100)]，
+        //                 它的 Load() 会在 SceneLoad.LoadData() 触发场景加载之前跑完
+        var dif = GetComponent<DataDifination>();
+        if (DataManager.instance != null && dif != null
+            && DataManager.instance.IsEnemyDead(dif.ID))
+        {
+            Destroy(gameObject);
+        }
     }
 
     private void Update()
@@ -171,6 +187,13 @@ public class Enemy : MonoBehaviour
         gameObject.layer = 2;
         isDead = true;
         animator.SetBool("isDead", isDead);
+
+        // 登记死亡。
+        // 不记的话，重新加载场景时这只野猪会作为"活的"被重建出来 ——
+        // 因为 Character 那边只保存了它的位置和血量，血量 > 0 就是"活着"。
+        var dif = GetComponent<DataDifination>();
+        if (DataManager.instance != null && dif != null)
+            DataManager.instance.MarkEnemyDead(dif.ID);
     }
 
     public void DestroyAfterAnimation()
