@@ -77,6 +77,7 @@ public class Character : MonoBehaviour, ISaveable
         {
             //死亡逻辑，血量清空，音效等
             curHealth = 0;
+            RecordHealth();                 // 立刻记进内存存档（同 TakeDamage 的理由）
             onHealthChanged?.Invoke(this);
             onDead?.Invoke();
         }
@@ -99,7 +100,32 @@ public class Character : MonoBehaviour, ISaveable
             TrigInvulnerable();
         }
 
+        RecordHealth();                     // 立刻记进内存存档
         onHealthChanged?.Invoke(this);
+    }
+
+    /// <summary>
+    /// 立即把当前血量写进【内存】存档。
+    ///
+    /// 【为什么不能只靠 GetSaveData】
+    /// GetSaveData 只在 DataManager.Save() 里被调用，而 Save() 只遍历 saveableList ——
+    /// 也就是【当时已加载】的对象，而且【前提是玩家真的去碰了存档点】。
+    /// 没碰过存档点就换场景，伤害就丢了 ——
+    /// 表现为「把敌人打伤后换场景，它回满血了」。
+    ///
+    /// 而死亡是立即记录的（Enemy.onDied -> MarkEnemyDead），
+    /// 所以会出现「伤丢、死不丢」的不一致。这里对齐。
+    ///
+    /// 只写内存，落盘仍由存档点触发 —— 未存档就死亡/读档时，伤害照样会被回滚，这是正确的。
+    /// </summary>
+    private void RecordHealth()
+    {
+        if (DataManager.instance == null) return;
+
+        var dif = GetDataID();
+        if (dif == null) return;            // 没挂 DataDifination 就不参与存档
+
+        DataManager.instance.MarkCharacterHealth(dif.ID, curHealth);
     }
 
     public void TrigInvulnerable()

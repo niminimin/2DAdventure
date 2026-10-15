@@ -250,8 +250,8 @@ private void OpenChest()
 
 | 类型 | 例子 | 记录时机 |
 |---|---|---|
-| **连续状态** | 玩家/敌人位置、敌人血量 | `Save()` 遍历快照 —— 可接受（它们和存档点通常在同一个场景） |
-| **离散事件** | **开箱**、打死 Boss、激活存档点 | **发生的那一刻**就写进内存 `saveData` |
+| **连续状态** | 玩家/敌人**位置** | `Save()` 遍历快照（可接受：位置是瞬态值） |
+| **变化即需保留的状态** | 血量、开箱、打死 Boss、激活存档点 | **变化的那一刻**就写进内存 `saveData` |
 
 > **野猪死亡之所以没这个 bug，就是因为它一开始就用的是"立即记录"**：
 > `Enemy.onDied()` → `DataManager.MarkEnemyDead()`。
@@ -263,27 +263,45 @@ private void OpenChest()
 `SavePoint` 本身就是那个"看起来能工作"的例子：它的 `Restore()` 会**自己触发 `Save()`**，
 而那一刻它肯定在 `saveableList` 里，所以只靠 `GetSaveData` 就够了 —— 这是特例，不要照抄。
 
-#### ⚠️ 已知残留问题：敌人「打伤」不会被记住
+#### ✅ 敌人「打伤」原本不会被记住 —— 已对齐修复
 
-按上表，敌人的血量属于**连续状态**，只在 `Save()` 时快照。所以：
+按上表，敌人的血量属于**连续状态**，原本只在 `Save()` 时快照，于是出现不一致：
 
-| 操作 | 结果 |
-|---|---|
-| 把野猪**打死** → 换场景 | **记得**（`MarkEnemyDead` 立即记录） |
-| 把野猪**打伤**（没打死）→ 不存档就换场景 | **回满血**（血量只在存档点快照） |
+| 操作 | 修复前 | 修复后 |
+|---|---|---|
+| 把野猪**打死** → 换场景 | **记得**（`MarkEnemyDead` 立即记录） | 记得 |
+| 把野猪**打伤**（没打死）→ 不存档就换场景 | **回满血**（血量只在存档点快照） | **保留残血** |
 
-**这两条放在一起是不一致的** —— 死亡记得、伤害不记得。
+根源还是同一个：`Character.GetSaveData()` 只在 `Save()` 里被调用 ——
+**前提是玩家真的去碰了存档点**。没碰过存档点就换场景，伤害就丢了。
 
-根源还是同一个：`Character.GetSaveData()` 只在 `Save()` 里被调用，
-而 `Save()` 只在 Cave 的存档点触发，那一刻野猪**确实**在场景里，所以本可以记录 ——
-但**前提是玩家真的去碰了存档点**。没碰过存档点就换场景，伤害就丢了。
+**修复**：在 `Character` 里抽出 `RecordHealth()`，受伤和溺水时立即写内存：
 
-> **注意玩家不受影响**：玩家挂在 `Persistent` 上，切场景时不会被重新实例化，
+```csharp
+public void TakeDamage(Attack attacker)
+{
+    ...
+    curHealth -= attacker.damage;
+    ...
+    RecordHealth();                     // ← 立刻记进内存存档
+    onHealthChanged?.Invoke(this);
+}
+
+private void RecordHealth()
+{
+    if (DataManager.instance == null) return;
+    var dif = GetDataID();
+    if (dif == null) return;            // 没挂 DataDifination 就不参与存档
+    DataManager.instance.MarkCharacterHealth(dif.ID, curHealth);
+}
+```
+
+> **位置仍然走存档点快照**，没有改成每帧写入 —— 位置是高频变化的瞬态值，
+> 且敌人回场景时出现在"上次存档的位置"是可接受的。如果以后需要，再单独对齐。
+
+> **玩家不受影响**：玩家挂在 `Persistent` 上，切场景时不会被重新实例化，
 > 所以 `Character.Start()` 不会重跑、血量不会被重置。
 > 这也是 `Character.cs` 里那段「为什么是 `Start` 而不是 `OnEnable`」注释在防的事。
->
-> 对齐方案（如需要）：在 `Character.TakeDamage()` 里也调一次"立即写入"，
-> 与 `MarkEnemyDead` 同一个模式。
 
 ### ⚠️ 前置条件：宝箱**必须**挂 `DataDifination`，且 `ID` 非空
 

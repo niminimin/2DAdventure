@@ -198,6 +198,23 @@ public class DataManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 立即把一个角色的血量写进【内存】存档。
+    ///
+    /// 血量属于「连续状态」，正常走 Save() 的存档点快照就够了 ——
+    /// 但那样会出现「打死敌人记得、打伤敌人不记得」的不一致：
+    ///   打死 -> Enemy.onDied() 立即 MarkEnemyDead()  -> 换场景记得
+    ///   打伤 -> 只等 Save() 遍历，没碰存档点就丢     -> 换场景回满血
+    ///
+    /// 所以这里也改成「发生变化就立即记录」，和死亡对齐。
+    /// 只写内存，落盘仍由存档点触发。
+    /// </summary>
+    public void MarkCharacterHealth(string id, float health)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        saveData.characterHealthDictionary[id] = health;
+    }
+
+    /// <summary>
     /// 只把存档数据套用给一个对象（不是全部）。
     /// 场景卸载重载后，新出来的对象靠这个把自己恢复成存档里的状态 ——
     /// 否则它只能拿到场景文件里序列化的默认值。
