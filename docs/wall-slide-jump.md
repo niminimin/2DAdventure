@@ -264,12 +264,57 @@ Attack Layer:  New State -> PlayerAttack1  [isAttack=If, attack=If, isWallSlide=
 
 | 想要的效果 | 怎么调 |
 |---|---|
-| 完全扒住不掉 | `wallSlideSpeed = 0` |
-| 下滑更快 / 更慢 | 调 `wallSlideSpeed` |
+| 下滑更快 / 更慢 | 调 `wallSlideSpeed`（注意下面那条「设 0 也会蠕滑」） |
+| **真正**完全扒住不掉 | `wallSlideSpeed = 0` **且**扒墙期间把 `gravityScale` 置 0 —— 单设 0 仍有约 0.79 单位/秒的蠕滑 |
 | 蹬墙跳得更高 | 调大 `wallJumpYForce`（注意别超过 `jumpForce` 太多，否则普通跳失去价值） |
 | 弹开更远 | 调大 `wallJumpXForce` 或 `wallJumpLockTime` |
 | 蹬墙后感觉「操作被夺走」 | 调小 `wallJumpLockTime`（但低于 0.15 左右就会开始被 `move()` 抹掉横向速度） |
 | 扒墙动画太慢 / 太快 | 改 `BlueWallSlide.anim` 的 `frameRate`（当前 8） |
+
+### ⚠️ `wallSlideSpeed = 0` **并不等于**「完全静止」
+
+```
+实际下滑速度 = wallSlideSpeed + 重力 × gravityScale × FixedTimestep
+```
+
+代入本项目参数（`Fixed Timestep = 0.02`、`Physics2D.gravity = -9.81`、玩家 `gravityScale = 4`）：
+
+```
+重力 × gravityScale × FixedTimestep = 9.81 × 4 × 0.02 = 0.785 单位/秒
+```
+
+| 你设的 `wallSlideSpeed` | **实际下滑速度** |
+|---|---|
+| `0` | **0.785 单位/秒**（能看到缓慢蠕滑） |
+| `2`（脚本默认） | **2.785 单位/秒** |
+
+**根因是 Unity 物理步的执行顺序：**
+
+```
+① FixedUpdate()              → 我们写 vy = -wallSlideSpeed
+② 物理步：施加重力            → vy += g × dt          ← 凭空多出 -0.785
+③ 物理步：用【新的 vy】积分位置 → Δy = vy × dt
+```
+
+`FixedUpdate` 只是把速度**改掉**，但紧接着物理步**还会再叠一次重力**才去积分位置 ——
+所以无论 `wallSlideSpeed` 设多少，都会额外多出 `g × dt` 这一段。
+
+**想真正锁死**，需要在扒墙期间把重力一起关掉（放在 `FixedUpdate` 里，幂等、不会漏恢复）：
+
+```csharp
+rb.gravityScale = isWallSliding ? 0f : normalGravityScale;
+```
+
+`normalGravityScale` 建议在 `Awake()` 里缓存 `rb.gravityScale` 的原始值。
+
+### ❌ 这不是物理材质的问题
+
+摩擦是**切向阻力**，只能**减缓**下滑，**不可能制造**下滑。
+墙的有效摩擦是 `0.2`（Unity 内置默认材质 `0.4` 与玩家材质 `0` 取平均），
+它反而在**轻微抑制**这个蠕滑；`bounciness = 0`，垂直方向也没有弹跳。
+
+> **当前取舍**：保留这 0.785 单位/秒的蠕滑。它让「扒墙」有个自然的衰减感，
+> 也避免玩家无限挂在墙上。要改成绝对静止就按上面的 `gravityScale` 方案。
 
 ---
 
