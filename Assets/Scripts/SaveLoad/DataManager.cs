@@ -175,6 +175,29 @@ public class DataManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 立即把一个「交互已触发」状态写进【内存】存档。
+    ///
+    /// 【为什么不能只靠 GetSaveData】
+    /// GetSaveData 只在 Save() 里被调用，而 Save() 只遍历 saveableList ——
+    /// 也就是【当前已加载】的对象。对于跨场景的对象（宝箱在 Forset、存档点在 Cave），
+    /// 存档那一刻它根本不存在，GetSaveData 永远不会执行，状态就此丢失。
+    ///
+    /// 所以【离散事件】（开箱、打死 Boss、激活存档点这类"发生一次"的状态）
+    /// 必须在发生的那一刻就记下来，不能等 Save() 来遍历。
+    /// 而连续状态（位置、血量）继续走存档点快照就够了。
+    ///
+    /// 只写内存，落盘仍由存档点触发 —— 与存档系统整体语义保持一致：
+    ///   开箱 → 换场景回来 → 记得（内存里记着）
+    ///   开箱 → 存档 → 读档 → 记得（落盘了）
+    ///   开箱 → 没存档就死了 → 读档 → 忘记（正确：未保存的进度该丢）
+    /// </summary>
+    public void MarkInteractTriggered(string id, bool value)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        saveData.interactHasTriggered[id] = value;
+    }
+
+    /// <summary>
     /// 只把存档数据套用给一个对象（不是全部）。
     /// 场景卸载重载后，新出来的对象靠这个把自己恢复成存档里的状态 ——
     /// 否则它只能拿到场景文件里序列化的默认值。

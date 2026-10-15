@@ -63,6 +63,14 @@ public class Chest : MonoBehaviour, IInteractable, ISaveable
     {
         isDone = true;
         RefreshVisual();
+
+        // 【必须在这里立即写进内存存档】
+        // 不能只靠 GetSaveData —— 它只在 Save() 里被调用，而 Save() 只遍历
+        // 【当前已加载】的对象。存档点在 Cave、宝箱在 Forset，
+        // 存档那一刻宝箱根本不存在，GetSaveData 永远不会执行。
+        // 症状就是「开了箱，切场景回来又关上了」。
+        DataManager.instance?.MarkInteractTriggered(GetDataID().ID, true);
+
         // 交互音效属于"开箱"这件事本身，所以由宝箱自己播（组件在 Inspector 里配）。
         GetComponent<AudioDefination>()?.PlayAudioClip();
     }
