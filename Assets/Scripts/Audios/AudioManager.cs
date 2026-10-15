@@ -96,6 +96,17 @@ public class AudioManager : MonoBehaviour
 
     private void OnBGMEvent(AudioClip clip)
     {
+        // 同一首且正在播 → 不要打断它。
+        //
+        // 每个场景的 BGM 是挂在场景里的 AudioDefination（playOnEnable = true）上、
+        // 靠 OnEnable 广播的。切场景时旧场景被卸载、新场景重新实例化，
+        // 如果每次都不问青红皂白地 Play()，同一首曲子就会被从 0:00 重播 ——
+        // 症状是「从 Forset 返回 Cave 时 BGM 突然重头开始」。
+        //
+        // 注意判空：clip 为 null 时 Play() 会停掉当前播放，不应该被这个守卫拦掉。
+        if (clip != null && BGMSource.clip == clip && BGMSource.isPlaying)
+            return;
+
         BGMSource.clip = clip;
         BGMSource.Play();
     }

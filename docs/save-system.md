@@ -28,6 +28,7 @@ Application.persistentDataPath + "/save.json"
 |---|---|
 | `Character`（玩家 / 敌人） | 位置 + 血量 |
 | `SavePoint` | `interactHasTriggered[ID] = isDone` |
+| `Chest` | `interactHasTriggered[ID] = isDone` |
 | `SceneLoad` | 当前场景（`GameObject` 序列化成 JSON）+ 玩家位置 |
 
 ---
@@ -155,7 +156,77 @@ if (DataManager.instance != null && dif != null && DataManager.instance.IsEnemyD
 
 ---
 
-## 四、🔴 三个必须知道的坑
+## 四、宝箱开启状态持久化
+
+### 原来的 bug
+
+`Chest` 只实现了 `IInteractable`，**漏了 `ISaveable`** —— 所以 `isDone` 根本不进存档系统。
+
+```csharp
+public class Chest : MonoBehaviour, IInteractable      // ← 漏了 ISaveable
+```
+
+症状：开箱 → 离开场景 → 回来，**宝箱重新关上了**（还能再开一次）。
+
+而 `Data.interactHasTriggered` 这个字典**早就存在**（`SavePoint` 在用），宝箱只是没接进去。
+
+### 实现
+
+照 `SavePoint` 的模式补齐三个接口方法 + 注册/反注册：
+
+```csharp
+public class Chest : MonoBehaviour, IInteractable, ISaveable
+{
+    private void OnEnable()
+    {
+        if (GetDataID() == null)
+        {
+            Debug.LogWarning($"[{name}] 宝箱缺少 DataDifination 组件，开启状态不会被保存", this);
+            RefreshVisual();
+            return;
+        }
+        DataManager.instance.RegisterSaveData(this);
+        DataManager.instance.LoadFor(this);      // 场景重载后拉回自己的状态
+    }
+
+    private void OnDisable() { if (GetDataID() != null) DataManager.instance.UnRegisterSaveData(this); }
+
+    public DataDifination GetDataID() { return GetComponent<DataDifination>(); }
+
+    public void GetSaveData(Data data)
+    {
+        string id = GetDataID().ID;
+        if (data.interactHasTriggered.ContainsKey(id)) data.interactHasTriggered[id] = isDone;
+        else data.interactHasTriggered.Add(id, isDone);
+    }
+
+    public void LoadData(Data data)
+    {
+        bool saved;
+        if (data.interactHasTriggered.TryGetValue(GetDataID().ID, out saved)) isDone = saved;
+        RefreshVisual();      // 把 isDone 刷到 sprite 上
+    }
+}
+```
+
+顺带把「设 sprite」抽成了 `RefreshVisual()`，`OnEnable` / `OpenChest` / `LoadData` 三处共用。
+
+### ⚠️ 前置条件：宝箱**必须**挂 `DataDifination`，且 `ID` 非空
+
+**这是实际踩到的坑**：`Forset.unity` 里那个宝箱**原本没有 `DataDifination` 组件**
+（只有 `Transform` / `SpriteRenderer` / `CircleCollider2D` / `Chest.cs` / `AudioDefination.cs`）。
+
+没有它 → `GetDataID()` 返回 `null` → `.ID` 直接 **NullReferenceException**。
+
+所以本次一并给 `Forset` 的宝箱补了组件（`presistentType = ReadAndWrite`，生成了唯一 ID）。
+代码里也加了 `null` 检查和明确的 `LogWarning` —— **不能静默**，
+否则症状是"开箱后切场景回来又关上了"，而没有任何线索指向配置问题。
+
+> 同理：`ID` 为空串的话，所有宝箱会共用 `""` 这一条记录。见坑 3。
+
+---
+
+## 五、🔴 三个必须知道的坑
 
 ### 坑 1：`JsonUtility` 完全不支持 `Dictionary`
 
@@ -206,21 +277,25 @@ private void OnValidate()
 
 ---
 
-## 五、相关 issue
+## 六、相关 issue
 
 | # | 标题 | 状态 |
 |---|---|---|
+| [#3](https://github.com/niminimin/2DAdventure/issues/3) | 场景切换返回时 BGM 会从头重播（**不属于存档系统**，见 `AudioManager.OnBGMEvent`） | Open（待验证关闭） |
 | [#4](https://github.com/niminimin/2DAdventure/issues/4) | 敌人死亡未持久化（本次修复） | Open（待验证关闭） |
 | [#5](https://github.com/niminimin/2DAdventure/issues/5) | 所有野猪共用同一个 `DataDifination.ID` | Closed（留作未来注意事项） |
-| [#6](https://github.com/niminimin/2DAdventure/issues/6) | 宝箱开启状态未持久化（`Chest` 漏了 `ISaveable`） | Open |
+| [#6](https://github.com/niminimin/2DAdventure/issues/6) | 宝箱开启状态未持久化（本次修复） | Open（待验证关闭） |
 
 ---
 
-## 六、验收记录
+## 七、验收记录
 
 | 项 | 结果 |
 |---|---|
 | 编译 | 0 错误 0 警告 |
-| `Data` 序列化往返 | `deadKeys:["boar-A","boar-B"]` / `deadValues:[true,true]` 正确写入并读回 ✅ |
+| `Data` 序列化往返（敌人死亡） | `deadKeys:["boar-A","boar-B"]` / `deadValues:[true,true]` 正确写入并读回 ✅ |
+| `Data` 序列化往返（宝箱） | `interactKeys:["1f8d9bd5-…"]` / `interactValues:[true]` 正确写入并读回 ✅ |
 | 影子列表 | 未被 `JsonUtility` 静默丢弃 ✅ |
-| 场景改动 | 无需改动（没有新增 MonoBehaviour 序列化字段） |
+| `Chest` 实现 `ISaveable` | `IsAssignableFrom` = True，三个方法齐全 ✅ |
+| `DataDifination.ID` 唯一性 | 全场景 + prefab 扫描，**全部唯一** ✅ |
+| 场景改动 | `Forset.unity`（给宝箱补 `DataDifination`）；`Persistent.unity` 无需改动 |
