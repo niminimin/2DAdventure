@@ -170,7 +170,9 @@ public class Chest : MonoBehaviour, IInteractable      // ← 漏了 ISaveable
 
 而 `Data.interactHasTriggered` 这个字典**早就存在**（`SavePoint` 在用），宝箱只是没接进去。
 
-### 实现
+### 实现（两处都改，缺一不可）
+
+#### ① 实现 `ISaveable` —— 让它能被「读」
 
 照 `SavePoint` 的模式补齐三个接口方法 + 注册/反注册：
 
@@ -210,6 +212,78 @@ public class Chest : MonoBehaviour, IInteractable, ISaveable
 ```
 
 顺带把「设 sprite」抽成了 `RefreshVisual()`，`OnEnable` / `OpenChest` / `LoadData` 三处共用。
+
+#### ② 开箱时**立即**写入内存存档 —— 这才是关键
+
+**只做 ① 是不够的**，这一点是实际排查出来的：
+
+> `GetSaveData()` **只在 `Save()` 里被调用**，而 `Save()` 只遍历 `saveableList` ——
+> 也就是**当前已加载**的对象。
+
+而本项目 **存档点在 Cave、宝箱在 Forest**：
+
+```
+在 Forest 开箱 → isDone = true（只改在组件上）
+  → 没有任何人写 saveData
+    → 走到 Cave（Forest 卸载，宝箱被销毁）
+      → 回 Forest → 新宝箱实例 → LoadData 查不到记录 → 保持关闭
+```
+
+**而且即使完全不存档、只是 Cave↔Forest 来回切，宝箱一样会关上** ——
+因为 `LoadData` 读的是**内存里的 `saveData`**，而那个值从来没被写进去过。
+
+所以 `OpenChest()` 里必须立即记录：
+
+```csharp
+private void OpenChest()
+{
+    isDone = true;
+    RefreshVisual();
+    DataManager.instance?.MarkInteractTriggered(GetDataID().ID, true);   // ← 关键
+    GetComponent<AudioDefination>()?.PlayAudioClip();
+}
+```
+
+### 📐 由此得出的通用原则：离散事件 vs 连续状态
+
+`saveData` 是**存档点快照**，不是**实时状态库**。所以记录时机必须分开：
+
+| 类型 | 例子 | 记录时机 |
+|---|---|---|
+| **连续状态** | 玩家/敌人位置、敌人血量 | `Save()` 遍历快照 —— 可接受（它们和存档点通常在同一个场景） |
+| **离散事件** | **开箱**、打死 Boss、激活存档点 | **发生的那一刻**就写进内存 `saveData` |
+
+> **野猪死亡之所以没这个 bug，就是因为它一开始就用的是"立即记录"**：
+> `Enemy.onDied()` → `DataManager.MarkEnemyDead()`。
+> 宝箱是后来才补的，**漏了这一步**，只实现了 `GetSaveData`。
+>
+> **给任何新的「离散事件类」对象接存档时，两处都要做** —— 只做 `GetSaveData` 是个陷阱，
+> 因为它在同场景下**看起来能工作**（存档点遍历时正好也在场），只在跨场景时才暴露。
+
+`SavePoint` 本身就是那个"看起来能工作"的例子：它的 `Restore()` 会**自己触发 `Save()`**，
+而那一刻它肯定在 `saveableList` 里，所以只靠 `GetSaveData` 就够了 —— 这是特例，不要照抄。
+
+#### ⚠️ 已知残留问题：敌人「打伤」不会被记住
+
+按上表，敌人的血量属于**连续状态**，只在 `Save()` 时快照。所以：
+
+| 操作 | 结果 |
+|---|---|
+| 把野猪**打死** → 换场景 | **记得**（`MarkEnemyDead` 立即记录） |
+| 把野猪**打伤**（没打死）→ 不存档就换场景 | **回满血**（血量只在存档点快照） |
+
+**这两条放在一起是不一致的** —— 死亡记得、伤害不记得。
+
+根源还是同一个：`Character.GetSaveData()` 只在 `Save()` 里被调用，
+而 `Save()` 只在 Cave 的存档点触发，那一刻野猪**确实**在场景里，所以本可以记录 ——
+但**前提是玩家真的去碰了存档点**。没碰过存档点就换场景，伤害就丢了。
+
+> **注意玩家不受影响**：玩家挂在 `Persistent` 上，切场景时不会被重新实例化，
+> 所以 `Character.Start()` 不会重跑、血量不会被重置。
+> 这也是 `Character.cs` 里那段「为什么是 `Start` 而不是 `OnEnable`」注释在防的事。
+>
+> 对齐方案（如需要）：在 `Character.TakeDamage()` 里也调一次"立即写入"，
+> 与 `MarkEnemyDead` 同一个模式。
 
 ### ⚠️ 前置条件：宝箱**必须**挂 `DataDifination`，且 `ID` 非空
 
