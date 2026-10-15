@@ -53,3 +53,15 @@ desktop.ini
 # Unity 打包时生成的资源清单
 /[Aa]ssets/[Aa]ssetStoreTools*
 /[Aa]ssets/[Pp]lugins/[Ee]ditor/JetBrains*
+
+# ---------------------------------------------------------------
+# Addressables 构建产物（每次构建自动重新生成，不入库）
+# ---------------------------------------------------------------
+# link.xml：Addressables 构建时自动生成的类型保留清单
+/[Aa]ssets/AddressableAssetsData/link.xml
+/[Aa]ssets/AddressableAssetsData/link.xml.meta
+
+# 每个构建目标一个目录，存放增量构建用的内容状态
+# 目前只有 Windows；以后新增平台（Android/、iOS/ 等）照此再加一行
+/[Aa]ssets/AddressableAssetsData/Windows/
+/[Aa]ssets/AddressableAssetsData/Windows.meta

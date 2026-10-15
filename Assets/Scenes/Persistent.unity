@@ -2213,7 +2213,7 @@ MonoBehaviour:
   BGMEvent: {fileID: 11400000, guid: 17934c6c390163e48b0e291ed143a2f6, type: 2}
   FXEvent: {fileID: 11400000, guid: 568e17d77fbdccb4b8923df11a3475c6, type: 2}
   VolumeChangeEvent: {fileID: 11400000, guid: 7506b53fe4a6a5a4d9fb2a12cd34c96c, type: 2}
-  SyncVolumeEvent: {fileID: 11400000, guid: 7506b53fe4a6a5a4d9fb2a12cd34c96c, type: 2}
+  SyncVolumeEvent: {fileID: 11400000, guid: 4777624bd76d2eb47988b65d7b294bfe, type: 2}
   BGMSource: {fileID: 899073711}
   FXSource: {fileID: 899073713}
   mixer: {fileID: 24100000, guid: 1aa33bc9007679d4d9b7f8da6ec2f9a7, type: 2}

@@ -47,11 +47,7 @@ public class Sign : MonoBehaviour
         if (!canPress) return;
 
         targetItem.TriggerAction();
-
-        // 音效不在这里统一播 —— 交给被交互物自己：挂 AudioDefination 就响，不挂就静音。
-        // 放在这里播的话，宝箱和传送门只能共用一个音，换场景也会带上开箱音。
-
-        
+       
         // 传送门则可能已经把这个场景整个换掉了。
         // 先做 Unity 的"假 null"判定，避免在已被销毁的组件上访问 CanInteract。
         if ((targetItem as UnityEngine.Object) == null)
