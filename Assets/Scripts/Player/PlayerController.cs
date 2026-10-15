@@ -23,10 +23,25 @@ public class PlayerController : MonoBehaviour
     public float woundForce;
     [Tooltip("垂直弹起力度。要能爬出你设计的坑深: v = sqrt(2 * g * 坑深), g = 9.81 * gravityScale")]
     public float bounceUpForce = 20;
+    [Header("扒墙 / 蹬墙跳")]
+    [Tooltip("贴墙时的下滑速度。调成 0 就变成完全扒住不动")]
+    public float wallSlideSpeed = 2f;
+    [Tooltip("蹬墙跳的垂直初速。建议与 jumpForce 保持一致，这样蹬墙跳和普通跳一样高")]
+    public float wallJumpYForce = 17f;
+    [Tooltip("蹬墙跳的横向初速。要明显大于 speed，弹开感才够")]
+    public float wallJumpXForce = 8f;
+    [Tooltip("蹬墙后锁定横向输入的时间。太短的话 move() 会立刻把横向速度抹掉，人会贴回墙上")]
+    public float wallJumpLockTime = 0.2f;
+
     [Header("State")]
     public bool isWounded;
     public bool isDead;
     public bool isAttack;
+    /// <summary>当前是否正在扒墙。PlayerAnimation 读它来切动画。</summary>
+    public bool isWallSliding;
+
+    private float wallSlideDir;        // -1 = 墙在左, +1 = 墙在右
+    private float wallJumpLockTimer;   // 蹬墙后横向输入锁定的剩余时间
 
     private void Awake()
     {
@@ -80,8 +95,58 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if(!isWounded)
+        UpdateWallSlide();
+
+        if (isWounded) return;
+
+        // 蹬墙后的锁定期内【绝对不能】调 move()：
+        // move() 每帧无条件把 velocity.x 写成 inputDirection.x * speed，
+        // 而蹬墙瞬间玩家往往是没按方向键的 —— 横向冲量会在下一帧被抹成 0，
+        // 表现就是「蹬了墙却原地起跳，然后贴回同一面墙」。
+        if (wallJumpLockTimer > 0f)
+        {
+            wallJumpLockTimer -= Time.fixedDeltaTime;
+            return;
+        }
+
+        if (isWallSliding)
+        {
+            // 横向照常给 speed（被墙挡住 = 贴住），纵向锁定为缓慢下滑
+            rb.velocity = new Vector2(inputDirection.x * speed, -wallSlideSpeed);
+        }
+        else
+        {
             move();
+        }
+    }
+
+    /// <summary>
+    /// 判定当前是否处于「扒墙」状态。五个条件必须同时满足。
+    /// 取舍理由（为什么上升中不扒、为什么必须按住方向）见 docs/wall-slide-jump.md
+    /// </summary>
+    private void UpdateWallSlide()
+    {
+        isWallSliding = false;
+
+        // 1. 落地 / 受伤 / 死亡 → 立刻脱离
+        if (phyCheck.isGround || isWounded || isDead) return;
+
+        // 2. 墙在左还是右。
+        //    PhysicsCheck 的左右探测是【世界方向】（不随 localScale 翻转），
+        //    所以这里拿到的是"世界左边有墙"，而不是"人物面朝方向的左边有墙"。
+        float dir = phyCheck.touchLeftWall  ? -1f
+                  : phyCheck.touchRightWall ?  1f
+                  : 0f;
+        if (dir == 0f) return;
+
+        // 3. 只在【下落中】扒。上升途中扒住会把跳跃硬生生截停，手感很怪
+        if (rb.velocity.y > 0.01f) return;
+
+        // 4. 必须【按住朝墙方向】。否则跑图时蹭到墙边会被莫名其妙地吸住
+        if (inputDirection.x * dir <= 0.01f) return;
+
+        isWallSliding = true;
+        wallSlideDir  = dir;
     }
 
     private void move()
@@ -106,7 +171,29 @@ public class PlayerController : MonoBehaviour
             rb.AddForce(transform.up * jumpForce, ForceMode2D.Impulse);
             GetComponent<AudioDefination>()?.PlayAudioClip();
         }
-            
+        else if (isWallSliding)
+        {
+            WallJump();
+        }
+    }
+
+    /// <summary>
+    /// 蹬墙跳。
+    ///
+    /// 这里【直接赋值 velocity】而不是像普通跳那样 AddForce：
+    /// AddForce 是叠加在现有速度上的，而扒墙时 vy 恒为 -wallSlideSpeed，
+    /// 用 AddForce 的话蹬墙高度会随下滑速度漂移。直接赋值才能保证每次一样高。
+    /// </summary>
+    private void WallJump()
+    {
+        isWallSliding     = false;
+        wallJumpLockTimer = wallJumpLockTime;
+
+        float away = -wallSlideDir;                        // 背离墙的方向
+        rb.velocity = new Vector2(away * wallJumpXForce, wallJumpYForce);
+        transform.localScale = new Vector3(away, 1, 1);    // 人物转向背对墙
+
+        GetComponent<AudioDefination>()?.PlayAudioClip();
     }
 
 
@@ -182,6 +269,9 @@ public class PlayerController : MonoBehaviour
     {
         isDead = false;
         isWounded = false;      // 不清掉的话 FixedUpdate 里 move() 永远被 if(!isWounded) 锁住
+        // 复位扒墙状态：否则在墙边死亡/读档后，残留的锁定期会把横向输入一直吃掉
+        isWallSliding     = false;
+        wallJumpLockTimer = 0f;
         inputControl.GamePlay.Enable();
 
         // 只补无敌帧, 不碰 curHealth

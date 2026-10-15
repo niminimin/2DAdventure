@@ -29,6 +29,8 @@ public class PlayerAnimation : MonoBehaviour
         animator.SetBool("isGround", phyCheck.isGround);
         animator.SetBool("isDead", playerController.isDead);
         animator.SetBool("isAttack", playerController.isAttack);
+        // 扒墙：状态判定在 PlayerController.UpdateWallSlide() 里，这里只负责喂给 Animator
+        animator.SetBool("isWallSlide", playerController.isWallSliding);
     }
 
     public void PlayerWounded()
