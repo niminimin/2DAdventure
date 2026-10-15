@@ -33,15 +33,25 @@ public class PlayerController : MonoBehaviour
     [Tooltip("蹬墙后锁定横向输入的时间。太短的话 move() 会立刻把横向速度抹掉，人会贴回墙上")]
     public float wallJumpLockTime = 0.2f;
 
+    [Header("滑铲")]
+    [Tooltip("滑铲时的水平速度。要明显大于 speed，才有冲刺感")]
+    public float slideSpeed = 9f;
+    [Tooltip("滑铲主体时长（Start 动画播完之后还能继续滑多久），之后进入 End")]
+    public float slideDuration = 0.5f;
+
     [Header("State")]
     public bool isWounded;
     public bool isDead;
     public bool isAttack;
     /// <summary>当前是否正在扒墙。PlayerAnimation 读它来切动画。</summary>
     public bool isWallSliding;
+    /// <summary>当前是否正在滑铲。PlayerAnimation 读它来切动画。</summary>
+    public bool isSliding;
 
     private float wallSlideDir;        // -1 = 墙在左, +1 = 墙在右
-    private float wallJumpLockTimer;   // 蹬墙后横向输入锁定的剩余时间
+    private float wallJumpLockTimer;   // 横向输入锁定的剩余时间（蹬墙跳 / 滑铲跳共用）
+    private float slideDir;            // 滑铲方向, -1 / +1
+    private float slideTimer;          // 滑铲剩余时间
 
     private void Awake()
     {
@@ -50,6 +60,7 @@ public class PlayerController : MonoBehaviour
         phyCheck = GetComponent<PhysicsCheck>();
         inputControl.GamePlay.Jump.started += Jump;
         inputControl.GamePlay.Attack.started += PlayerAttack;
+        inputControl.GamePlay.Slide.started += Slide;
     }
 
 
@@ -96,16 +107,24 @@ public class PlayerController : MonoBehaviour
     private void FixedUpdate()
     {
         UpdateWallSlide();
+        UpdateSlide();
 
         if (isWounded) return;
 
-        // 蹬墙后的锁定期内【绝对不能】调 move()：
+        // 锁定期内【绝对不能】调 move()：
         // move() 每帧无条件把 velocity.x 写成 inputDirection.x * speed，
-        // 而蹬墙瞬间玩家往往是没按方向键的 —— 横向冲量会在下一帧被抹成 0，
-        // 表现就是「蹬了墙却原地起跳，然后贴回同一面墙」。
+        // 而蹬墙/滑铲跳的瞬间玩家往往没按方向键 —— 横向冲量会在下一帧被抹成 0。
+        // 表现就是「蹬了墙却原地起跳」或「滑铲跳冲不出去」。
         if (wallJumpLockTimer > 0f)
         {
             wallJumpLockTimer -= Time.fixedDeltaTime;
+            return;
+        }
+
+        // 滑铲同样必须接管水平速度，不能落到 move() 手里
+        if (isSliding)
+        {
+            rb.velocity = new Vector2(slideDir * slideSpeed, rb.velocity.y);
             return;
         }
 
@@ -118,6 +137,46 @@ public class PlayerController : MonoBehaviour
         {
             move();
         }
+    }
+
+    /// <summary>
+    /// 滑铲的维持与结束判定。每帧在 FixedUpdate 开头跑一次。
+    /// 【开始】的判定在 Slide() 输入回调里，这里只负责维持和结束。
+    /// </summary>
+    private void UpdateSlide()
+    {
+        if (!isSliding) return;
+
+        slideTimer -= Time.fixedDeltaTime;
+
+        // 结束条件：时长到 / 离开地面 / 受伤 / 死亡
+        // "离开地面就结束"是刻意选的 —— 滑出平台直接收招，不做空中滑铲
+        if (slideTimer <= 0f || !phyCheck.isGround || isWounded || isDead)
+            isSliding = false;
+    }
+
+    /// <summary>
+    /// 滑铲输入回调（L 键）。只负责【开始】。
+    ///
+    /// 触发要求「正在跑动」：按住方向键会进跑步动画，在跑步中滑铲比原地按 L 更符合直觉。
+    /// 方向由输入方向决定，所以按住 ← 再按 L 就是向左滑铲。
+    /// </summary>
+    private void Slide(InputAction.CallbackContext context)
+    {
+        if (isSliding || isWallSliding || isWounded || isDead) return;
+        if (!phyCheck.isGround) return;
+
+        // 必须在跑动中：没有水平输入就不触发
+        if (Mathf.Abs(inputDirection.x) <= 0.1f) return;
+
+        slideDir   = Mathf.Sign(inputDirection.x);
+        slideTimer = slideDuration;
+        isSliding  = true;
+
+        // 清掉可能残留的横向锁定，否则滑铲会被锁住不动
+        wallJumpLockTimer = 0f;
+
+        transform.localScale = new Vector3(slideDir, 1, 1);
     }
 
     /// <summary>
@@ -168,13 +227,31 @@ public class PlayerController : MonoBehaviour
         //Debug.Log("jump");
         if (phyCheck.isGround)
         {
-            rb.AddForce(transform.up * jumpForce, ForceMode2D.Impulse);
+            // 滑铲跳：保留滑铲的横向速度冲出去，而不是就地起跳
+            if (isSliding)
+                SlideJump();
+            else
+                rb.AddForce(transform.up * jumpForce, ForceMode2D.Impulse);
+
             GetComponent<AudioDefination>()?.PlayAudioClip();
         }
         else if (isWallSliding)
         {
             WallJump();
         }
+    }
+
+    /// <summary>
+    /// 滑铲跳。和蹬墙跳一样【直接赋值 velocity】而不是 AddForce，
+    /// 并复用 wallJumpLockTimer 保住横向速度 ——
+    /// 否则下一帧 move() 会把 slideSpeed(9) 抹成 speed(6)，冲刺感直接没了。
+    /// </summary>
+    private void SlideJump()
+    {
+        isSliding         = false;
+        wallJumpLockTimer = wallJumpLockTime;
+
+        rb.velocity = new Vector2(slideDir * slideSpeed, jumpForce);
     }
 
     /// <summary>
@@ -199,17 +276,19 @@ public class PlayerController : MonoBehaviour
 
     private void PlayerAttack(InputAction.CallbackContext context)
     {
-        // 扒墙时禁止攻击 —— 手抓着墙腾不出手。
+        // 扒墙 / 滑铲时都禁止攻击 —— 手上有动作，腾不出来。
         //
-        // 不拦的话会出问题：Attack Layer 是 weight=1 / Override / 【没有 Avatar Mask】的
-        // 全身层，一进攻击状态就把 Base Layer 的 BlueWallSlide 整个盖掉（2D 纯 Sprite 动画
-        // 没法用 Avatar Mask 只遮上半身，Mask 只对骨骼/Transform 层级有效，管不了 m_Sprite 曲线）。
-        // 更糟的是 UpdateWallSlide() 的守卫里没有 isAttack，物理上仍在扒墙下滑，
-        // 于是变成"一边挥刀一边贴墙下滑"，动画和物理对不上。
+        // 不拦的话 Attack Layer 会把动画整个盖掉：它是 weight=1 / Override /
+        // 【没有 Avatar Mask】的全身层。（2D 纯 Sprite 动画没法只遮上半身 ——
+        // Avatar Mask 只对骨骼/Transform 层级有效，管不了 m_Sprite 曲线。）
         //
-        // Animator 的 Attack Layer 里还有一道 isWallSlide=IfNot 的转场保险，
-        // 但【不能只靠它】：那样 isAttack 永远不会被 AttackBehaviour.OnStateExit 复位。
+        // 另外 UpdateWallSlide() / UpdateSlide() 的守卫里都没有 isAttack，
+        // 物理上仍在扒墙下滑 / 滑铲，于是变成"一边挥刀一边贴墙下滑"，动画和物理对不上。
+        //
+        // Animator 里还有一道 isWallSlide=IfNot 的转场保险，但【不能只靠它】：
+        // 那样 isAttack 永远不会被 AttackBehaviour.OnStateExit 复位。
         if (isWallSliding) return;
+        if (isSliding) return;
 
         GetComponent<PlayerAnimation>().PlayerAttack();
         isAttack = true;
@@ -281,9 +360,12 @@ public class PlayerController : MonoBehaviour
     {
         isDead = false;
         isWounded = false;      // 不清掉的话 FixedUpdate 里 move() 永远被 if(!isWounded) 锁住
-        // 复位扒墙状态：否则在墙边死亡/读档后，残留的锁定期会把横向输入一直吃掉
+        // 复位扒墙 / 滑铲状态：否则在墙边死亡或滑铲中读档后，
+        // 残留的锁定期会把横向输入一直吃掉
         isWallSliding     = false;
+        isSliding         = false;
         wallJumpLockTimer = 0f;
+        slideTimer        = 0f;
         inputControl.GamePlay.Enable();
 
         // 只补无敌帧, 不碰 curHealth

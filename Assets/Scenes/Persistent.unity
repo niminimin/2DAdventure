@@ -4066,10 +4066,13 @@ MonoBehaviour:
   wallJumpYForce: 20
   wallJumpXForce: 8
   wallJumpLockTime: 0.2
+  slideSpeed: 9
+  slideDuration: 0.5
   isWounded: 0
   isDead: 0
   isAttack: 0
   isWallSliding: 0
+  isSliding: 0
 --- !u!114 &2025687776
 MonoBehaviour:
   m_ObjectHideFlags: 0

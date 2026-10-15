@@ -31,6 +31,8 @@ public class PlayerAnimation : MonoBehaviour
         animator.SetBool("isAttack", playerController.isAttack);
         // 扒墙：状态判定在 PlayerController.UpdateWallSlide() 里，这里只负责喂给 Animator
         animator.SetBool("isWallSlide", playerController.isWallSliding);
+        // 滑铲：状态判定在 PlayerController.Slide() / UpdateSlide() 里，同理
+        animator.SetBool("isSliding", playerController.isSliding);
     }
 
     public void PlayerWounded()
