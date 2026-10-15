@@ -4062,9 +4062,14 @@ MonoBehaviour:
   jumpForce: 17
   woundForce: 6
   bounceUpForce: 17
+  wallSlideSpeed: 0
+  wallJumpYForce: 20
+  wallJumpXForce: 8
+  wallJumpLockTime: 0.2
   isWounded: 0
   isDead: 0
   isAttack: 0
+  isWallSliding: 0
 --- !u!114 &2025687776
 MonoBehaviour:
   m_ObjectHideFlags: 0

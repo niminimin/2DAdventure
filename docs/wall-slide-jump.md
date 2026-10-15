@@ -246,6 +246,22 @@ Attack Layer:  New State -> PlayerAttack1  [isAttack=If, attack=If, isWallSlide=
 
 ## 七、调参指南
 
+> ### ⚠️ 改完 Inspector 里的参数，**必须 `Ctrl+S` 保存场景，再按 Play**
+>
+> 本项目的场景是 **Addressables 加载**的：按 Play 时 `InitLoad.Awake()` 会执行
+> `Addressables.LoadSceneAsync("Persistent")`，加载的是 **AssetDatabase 里已保存的场景**。
+> 场景不保存的话，运行时实例拿到的还是旧版本 —— 你在 Inspector 里改的数字**根本进不去**。
+>
+> **这个坑真实发生过**：`wallSlideSpeed` 被改成 `0`（想完全扒住不动）却毫无效果，
+> 观察到的仍然是缓慢下滑。原因是 `Persistent.unity` 里**当时连这个字段都不存在** ——
+>
+> 给脚本**新增**序列化字段时，Unity **不会**自动写进已有的场景实例；
+> 字段在场景里缺失时，反序列化一律回落到**脚本默认值 `wallSlideSpeed = 2f`**。
+> 所以表现就是「改了没用，还是有点快」。
+>
+> **判断方法**：`git diff Assets/Scenes/Persistent.unity` —— 如果看不到你新加的字段，
+> 就说明场景没保存，运行时用的还是脚本默认值。
+
 | 想要的效果 | 怎么调 |
 |---|---|
 | 完全扒住不掉 | `wallSlideSpeed = 0` |
@@ -297,3 +313,4 @@ Attack Layer:  New State -> PlayerAttack1  [isAttack=If, attack=If, isWallSlide=
 | Base Layer 转场 | 4 条全部就位（含 `ANY -> Jump` 修正） |
 | Attack Layer 保险 | `New State -> PlayerAttack1 [isAttack=If, attack=If, isWallSlide=IfNot]` |
 | 扒墙时攻击 | 代码守卫 `if (isWallSliding) return;` 已加 |
+| 场景序列化 | `Persistent.unity` 已写入 `wallSlideSpeed` / `wallJumpYForce` / `wallJumpXForce` / `wallJumpLockTime` / `isWallSliding`（见第七节的保存坑） |
