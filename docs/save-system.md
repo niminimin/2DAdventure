@@ -1,7 +1,9 @@
 # 存档系统（Save / Load）
 
-> 记录存档系统的架构、三条触发路径、以及踩过的坑。
+> 记录存档系统的**核心机制**、架构、三条触发路径、以及踩过的坑。
 > 本文由「修复敌人死亡未持久化」这个 bug 的排查过程整理而来。
+>
+> **只想快速理解机制的话，直接看第二节。**
 
 ---
 
@@ -22,7 +24,7 @@ Application.persistentDataPath + "/save.json"
 
 > ⚠️ 改 Player Settings 里的 **Company Name / Product Name 会改变这个路径**，旧存档会因此"找不到"。
 
-## 谁实现了 ISaveable
+### 谁实现了 ISaveable
 
 | 对象 | 存什么 |
 |---|---|
@@ -33,7 +35,149 @@ Application.persistentDataPath + "/save.json"
 
 ---
 
-## 二、三条触发路径
+## 二、核心机制：主动写 + 创建即读
+
+### 一句话
+
+> **状态变化时，对象主动把状态推给 `DataManager`；
+> 对象被重新创建时，主动向 `DataManager` 拉回自己的状态。**
+
+`DataManager` 不"定时去问"。它只是**一本长期存活的记事本**。
+
+### 为什么这本记事本能活过场景切换
+
+```csharp
+// SceneLoad.cs
+yield return curLoadScene.sceneReference.UnLoadScene();        // 只卸载【当前 Location 场景】
+playerTrans.gameObject.SetActive(false);
+sceneToLoad.sceneReference.LoadSceneAsync(LoadSceneMode.Additive, true);
+```
+
+**`Persistent` 从游戏启动到结束，从来没有被卸载过。**
+→ 挂在它上面的 `DataManager.instance` 一直活着
+→ `saveData` 里那几个字典一直活着
+
+所以：野猪和宝箱被销毁了，但**关于它们的记录住在另一个不会被销毁的地方**。
+
+### 原来的模型错在哪
+
+原来的 `DataManager` 用的是**拉取式（pull）**：
+
+```
+存档点触发 → DataManager 遍历 saveableList，逐个问"你现在什么状态？"
+```
+
+这个模型有个致命限制：**只有"在场"的对象才能被问到。**
+
+而本项目的布局是 **存档点在 Cave、宝箱在 Forest** —— 存档那一刻宝箱根本不存在，永远不会被问到。
+
+**正确模型是推送式（push）**：
+
+```
+状态一变   → 对象自己推给 DataManager（写记事本）
+对象被创建 → 对象自己从 DataManager 拉回（读记事本）
+```
+
+### 两个动作
+
+| 时刻 | 钩子 | 做什么 |
+|---|---|---|
+| **状态变化** | 事件发生的那一行 | `DataManager.MarkXxx(id, value)` —— **写**记事本 |
+| **对象被创建** | `Awake` / `OnEnable` / `Start` | `DataManager.LoadFor(this)` 或 `IsXxx(id)` —— **读**记事本 |
+
+### ⚠️ 读的时机是「实例诞生」，不是「每帧」
+
+同一个实例活着的时候**不要反复读** —— 读了会覆盖玩家中途的进度。
+
+比如玩家受伤后 `curHealth` 变了但还没存档，
+如果每帧都 `LoadData`，这次受伤就会被"治好"。
+
+**读只在「新实例诞生时」做一次。**
+
+### 该用哪个钩子？`Awake` / `OnEnable` / `Start`
+
+| 钩子 | 调用时机 | 同一实例调用次数 | 本项目用在哪、为什么 |
+|---|---|---|---|
+| **`Awake`** | 实例化后**立刻**，早于 `OnEnable` | **1 次** | `Enemy.Awake()` 查死亡标记 —— 需要**最早**，`Destroy` 得够快才不会闪一帧 |
+| **`OnEnable`** | `Awake` 之后；此后每次 `SetActive(true)` | **可能多次** | `Chest.OnEnable/OnDisable` 成对注册/反注册；`SavePoint` 也是这个做法 |
+| **`Start`** | 第一帧 `Update` 之前，晚于所有 `Awake`/`OnEnable` | **1 次** | `Character.Start()` 恢复血量+位置 —— **故意不用 `OnEnable`**，见下 |
+
+#### 为什么 `Character` 必须用 `Start` 而不是 `OnEnable`
+
+`Character.cs` 里有一段长注释专门讲这件事：
+
+> `SceneLoad` 切场景时会对玩家做 `SetActive(false)` / `SetActive(true)`
+> （`SceneLoad.cs:111` 和 `:136`）。**每做一次就会重跑一遍 `OnEnable`。**
+> 如果把恢复逻辑写在 `OnEnable`，玩家每走进一个新场景就会
+> **被传送回上一个存档点**，而且**血量退回存档值**（中途受的伤白受）。
+>
+> `Start` 每个实例只跑一次；而玩家挂在 `Persistent` 上、切场景**不会重新实例化**，
+> 所以 `Start` 实际上只在游戏启动时跑一次。
+
+#### 但 `Awake` 期间，别的对象可能还没初始化
+
+`DataManager.instance` 之所以在 `Enemy.Awake()` 里就一定可用，是靠**加载顺序**保证的：
+
+- `DataManager` 挂在 `Persistent` 上，而 `Persistent` 是**第一个被加载**的场景
+- 它的 `Awake` 早就跑完了
+
+如果哪天要读的是**同场景另一个对象**的状态，`Awake` 就不安全了
+（同场景内的 `Awake` 顺序 Unity 不保证），那时候要改用 `Start`。
+
+### 三个写入入口 —— 新加东西照这三个抄
+
+```csharp
+// 1. 敌人死亡
+Enemy.onDied()             → MarkEnemyDead(id)                 → deadEnemies[id] = true
+
+// 2. 交互物（宝箱 / 存档点）
+Chest.OpenChest()          → MarkInteractTriggered(id, true)   → interactHasTriggered[id] = true
+
+// 3. 血量变化（受伤 / 溺水）
+Character.RecordHealth()   → MarkCharacterHealth(id, hp)       → characterHealthDictionary[id] = hp
+```
+
+三个方法都在 `DataManager` 里，写法一模一样，都带**空 ID 保护**
+（ID 为空就跳过，避免所有对象挤在 `""` 这一条记录上）。
+
+### 只写内存，**不立即落盘**
+
+| 操作 | 结果 | 为什么 |
+|---|---|---|
+| 开箱 → 换场景回来 | **记得** | 记事本在内存里 |
+| 开箱 → 碰存档点 → 读档 | **记得** | 已经落盘了 |
+| 开箱 → **没存档就死了** → 读档 | **忘记** | ✅ 正确：未保存的进度就该丢 |
+
+**「记录到内存」和「保存到磁盘」是两件事。**
+如果 `MarkXxx` 改成"立即落盘"，就变成了随时随地自动存档，和「存档点」这套机制直接冲突。
+
+### 一张图
+
+```
+        ┌────────────────────────────────────────────────┐
+        │  DataManager   (单例 / 挂在 Persistent 上)      │
+        │  ┌──────────────────────────────────────────┐  │
+        │  │ saveData : Data          ← 长期存活的记事本 │  │
+        │  │   characterPositionDictionary            │  │
+        │  │   characterHealthDictionary              │  │
+        │  │   interactHasTriggered  ← 宝箱 / 存档点   │  │
+        │  │   deadEnemies           ← 野猪           │  │
+        │  └──────────────────────────────────────────┘  │
+        └───────▲────────────────────────────┬───────────┘
+                │  写                         │  查
+   ┌────────────┴───────────┐   ┌─────────────▼─────────────┐
+   │ 【状态变化的那一刻】    │   │ 【对象被创建的那一刻】     │
+   │ Enemy.onDied()         │   │ Enemy.Awake()             │
+   │ Chest.OpenChest()      │   │ Chest.OnEnable()          │
+   │ Character.TakeDamage() │   │ Character.Start()         │
+   └────────────────────────┘   └───────────────────────────┘
+```
+
+> 具体的逐帧时间线（野猪死亡 / 宝箱开箱）见本文第四、五节。
+
+---
+
+## 三、三条触发路径
 
 ### ① 碰存档点 → 写盘
 
@@ -76,7 +220,7 @@ loadGameEvent.RaiseEvent()
 
 ---
 
-## 三、敌人死亡持久化（本次新增）
+## 四、敌人死亡持久化
 
 ### 背景
 
@@ -156,7 +300,7 @@ if (DataManager.instance != null && dif != null && DataManager.instance.IsEnemyD
 
 ---
 
-## 四、宝箱开启状态持久化
+## 五、宝箱开启状态持久化
 
 ### 原来的 bug
 
@@ -318,7 +462,7 @@ private void RecordHealth()
 
 ---
 
-## 五、🔴 四个必须知道的坑
+## 六、🔴 四个必须知道的坑
 
 ### 坑 1：`JsonUtility` 完全不支持 `Dictionary`
 
@@ -423,7 +567,7 @@ catch (Exception e) { ... }
 
 ---
 
-## 六、相关 issue
+## 七、相关 issue
 
 | # | 标题 | 状态 |
 |---|---|---|
@@ -434,7 +578,7 @@ catch (Exception e) { ... }
 
 ---
 
-## 七、验收记录
+## 八、验收记录
 
 | 项 | 结果 |
 |---|---|
