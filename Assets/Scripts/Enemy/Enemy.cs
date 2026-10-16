@@ -30,10 +30,18 @@ public class Enemy : MonoBehaviour
     [Header("状态")]
     public bool isWounded;
     public bool isWait;
+    /// <summary>
+    /// 仅作对外查询 / 动画参数用 —— 【不再充当逻辑守卫】。
+    ///
+    /// "死后不跑 AI、不移动"现在由 BoarDeadState 保证：死亡时 curState 就是它，
+    /// 于是 Update / FixedUpdate 里一个 if (isDead) 都不需要。
+    /// 这正是本次重构的目的：约束从"每个调用点"收敛到"状态本身"。
+    /// </summary>
     public bool isDead;
     private BaseState curState;
     protected BaseState patrolState;
     protected BaseState chaseState;
+    protected BaseState deadState;
     protected virtual void Awake()
     {
         animator = GetComponent<Animator>();
@@ -61,9 +69,13 @@ public class Enemy : MonoBehaviour
     {
         faceDir = new Vector3(-transform.localScale.x, 0, 0);
 
+        // 状态机现在覆盖【全部】行为，所以这里一个 bool 守卫都不需要：
+        // 死后 curState 就是 BoarDeadState，它的 LogicUpdate 是空实现。
+        //
+        // 注意原来这里还挂着 TimeCounter() —— 那是脱离状态机的【第二条执行路径】，
+        // 死亡后照样会跑（而且它内部会写 transform.localScale，即"转向"）。
+        // 它的两份职责已经分别下沉到 BoarPatrolState / BoarChaseState。
         curState.LogicUpdate();
-
-        TimeCounter();
     }
 
     private void OnEnable()
@@ -74,9 +86,11 @@ public class Enemy : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (!isWait && !isWounded && !isDead)
-            move();
-
+        // move() 的守卫下沉到了各状态的 PhysicsUpdate：
+        //   Patrol -> 等待中 / 受伤硬直 不移动
+        //   Chase  -> 受伤硬直 不移动
+        //   Dead   -> 什么都不做
+        // 所以这里不再需要 isWait / isWounded / isDead 三个 bool 判断。
         curState.PhysicsUpdate();
     }
 
@@ -88,31 +102,6 @@ public class Enemy : MonoBehaviour
     public virtual void move()
     {
         rb.velocity = new Vector2(curSpeed * faceDir.x, rb.velocity.y);
-    }
-
-    private void TimeCounter()
-    {
-        if (isWait)
-        {
-            
-            waitTimeCount += Time.deltaTime;
-            if(waitTimeCount >= waitTime)
-            {
-                waitTimeCount = 0;
-                isWait = false;
-                transform.localScale = new Vector3(faceDir.x, 1, 1);
-                
-            }
-        }
-
-        if (curState == chaseState && !FoundPlayer())
-        {
-            lostTimeCount += Time.deltaTime;
-        }
-        else
-        {
-            lostTimeCount = 0;
-        }
     }
 
     public bool FoundPlayer()
@@ -130,6 +119,9 @@ public class Enemy : MonoBehaviour
                 break;
             case EnemyState.Chase:
                 newState = chaseState;
+                break;
+            case EnemyState.Dead:
+                newState = deadState;
                 break;
             default:
                 break;
@@ -187,6 +179,14 @@ public class Enemy : MonoBehaviour
         gameObject.layer = 2;
         isDead = true;
         animator.SetBool("isDead", isDead);
+
+        // 切进死亡状态 —— 这是"死后不再跑 AI"的【唯一约束点】。
+        // 切进去之后 curState 就是 BoarDeadState，它的 LogicUpdate / PhysicsUpdate
+        // 都是空实现，所以 Update / FixedUpdate 里一个 isDead 守卫都不需要。
+        //
+        // 原来的写法是把 isDead 当成状态机之外的 bool，于是守卫必须写在每个调用点：
+        // 结果 Update() 漏了一处，死后仍在跑状态机与转向逻辑。
+        SwitchState(EnemyState.Dead);
 
         // 登记死亡。
         // 不记的话，重新加载场景时这只野猪会作为"活的"被重建出来 ——
