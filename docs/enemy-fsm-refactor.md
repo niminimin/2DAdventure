@@ -1,7 +1,28 @@
-# 敌人 FSM 重构方案（待执行）
+# 敌人 FSM 重构方案
 
-> **状态：方案阶段 —— 本文只记录设计，尚未改动任何代码。**
+> ## ✅ 已实施（commit `1870b6c`）
 >
+> 本文原为方案，现已按步骤 1~3 完整执行并验证通过。**保留原文以便回溯设计动机与取舍。**
+>
+> **结构验收**
+> - `Enemy.Update()` 代码只剩 `faceDir = ...; curState.LogicUpdate();` —— 无任何 bool 守卫
+> - `Enemy.FixedUpdate()` 代码只剩 `curState.PhysicsUpdate();` —— 无任何 bool 守卫
+> - `Enemy.TimeCounter()` 已彻底删除
+> - 写敌人 `localScale`（转向）的位置只剩 `BoarPatrolState` 与 `BoarChaseState`
+>
+> **运行时验证**（临时场景造 Boar，驱动真实状态对象）
+> - A 等待倒计时 + 转身仍能工作（`localScale.x` 1 → -1，`isWait` 清除）✅
+> - B 切进死亡后模拟 60 帧：**翻转次数 = 0** ✅
+> - C 死亡是终态 ✅
+> - D `onDied()` 走真实路径切进 `BoarDeadState` ✅
+>
+> **实施时额外发现并一并修正的三处**（不做会引入新 bug）：
+> 1. `BoarPatrolState.OnExit` 必须清 `isWait` —— 倒计时搬进来后离开巡逻就没人让它归位了
+> 2. `BoarChaseState.OnEnter` 必须重置 `lostTimeCount` —— 原来靠 `TimeCounter` 被动归零
+> 3. 两个 `LogicUpdate` 在 `SwitchState` 之后必须 `return` —— 原代码缺这句
+
+---
+
 > 目标：让「死后还在跑 AI」这一类问题**在结构上无法发生**，
 > 而不是靠在调用点补 `if (isDead) return;`。
 >
