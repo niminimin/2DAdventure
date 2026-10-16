@@ -73,14 +73,31 @@ public class Character : MonoBehaviour, ISaveable
 
     private void OnTriggerStay2D(Collider2D collision)
     {
-        if (collision.CompareTag("Water"))
-        {
-            //死亡逻辑，血量清空，音效等
-            curHealth = 0;
-            RecordHealth();                 // 立刻记进内存存档（同 TakeDamage 的理由）
-            onHealthChanged?.Invoke(this);
-            onDead?.Invoke();
-        }
+        if (!collision.CompareTag("Water")) return;
+
+        // 【必须和 TakeDamage 一样先看无敌帧 —— 原来这里是漏的】
+        //
+        // 溺水原来是【每物理帧】无条件清零，所以 TrigInvulnerable() 对它完全无效：
+        //   死亡后点"返回菜单" -> PlayerInitInMenu() 回满血并给 1 秒无敌帧，
+        //   但玩家这时【还泡在水里】—— 场景卸载前有 fadeDuration(0.5s) 的淡出等待，
+        //   SetActive(false) 在那之后才执行 —— 于是下一物理帧血量又被清零，
+        //   于是又死一次，带着 isDead = true 回到菜单。
+        if (isInvulnerable) return;
+
+        // 已经死了就不再重复触发。
+        // OnTriggerStay2D 是【每物理帧】调用的：没有这个守卫的话，只要还泡在水里，
+        // onDead 就会每帧广播一次（死亡音效/动画被反复重播，GetDied 每帧被调一遍）。
+        if (curHealth <= 0) return;
+
+        //死亡逻辑，血量清空，音效等
+        curHealth = 0;
+        RecordHealth();                 // 立刻记进内存存档（同 TakeDamage 的理由）
+        onHealthChanged?.Invoke(this);
+        onDead?.Invoke();
+
+        // 与 TakeDamage 的死亡分支保持一致：死后给一段无敌帧，
+        // 避免同一帧/紧接的后续触发再次打死。
+        TrigInvulnerable();
     }
 
     public void TakeDamage(Attack attacker)
