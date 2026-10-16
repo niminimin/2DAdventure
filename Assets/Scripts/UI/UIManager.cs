@@ -66,6 +66,22 @@ public class UIManager : MonoBehaviour
     private void OnHidePanelEvent()
     {
         GameOverPanel.SetActive(false);
+
+        // 【必须恢复 timeScale —— 否则从暂停状态点"返回菜单"会卡死】
+        //
+        // 暂停面板会把 Time.timeScale 设成 0（见 TogglePausePanel），
+        // 而场景切换协程里用的是 yield return new WaitForSeconds(fadeDuration) ——
+        // WaitForSeconds 也受 timeScale 影响：0 的时候协程永远不推进，
+        // 于是画面淡出之后就再也没有下文，游戏卡在过渡里出不来。
+        //
+        // 收在这里而不是收在按钮自己的方法里，是为了覆盖【所有离开暂停状态的路径】：
+        // 返回菜单 / 读档 / 新游戏 —— 三条都广播这几个事件。
+        Time.timeScale = 1;
+
+        // 同步收起暂停面板：从暂停状态触发上面任一条路径时，
+        // 它不该继续留在屏幕上（返回菜单后新场景里会看到它）。
+        if (pausePanel != null && pausePanel.activeSelf)
+            pausePanel.SetActive(false);
     }
 
     private void OnSceneLoadRequest(GameSceneSO sceneToLoad, Vector3 arg1, bool arg2)
