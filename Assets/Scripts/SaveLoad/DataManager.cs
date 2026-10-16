@@ -64,6 +64,37 @@ public class DataManager : MonoBehaviour
     private void ResetData()
     {
         saveData = new Data();
+
+        // 【必须同时清磁盘 —— 只清内存的话"新游戏"只是个幻觉】
+        //
+        // 症状：点「新游戏」→ 没去存档点就死亡 → 点「回到存档点」
+        //       → Load() 发现 save.json 还在 → 读盘 → 被传回【上一个游戏】的存档点。
+        //       同理：点完「新游戏」再回菜单点「继续」，也会读回上一个游戏的进度。
+        //
+        // 注意：FallbackToNewGame() 也是靠广播 newGameEvent 走到这里的，所以
+        //   - "没有存档文件"     → 文件不存在，DeleteSaveFile 静默返回
+        //   - "存档损坏读不出来" → 会把读不出来的损坏存档删掉
+        //     （Load() 里已经声明"按没有存档处理"，删掉它让状态一致）
+        DeleteSaveFile();
+    }
+
+    /// <summary>
+    /// 删除磁盘上的存档文件。文件不存在时静默返回 —— 新游戏时这是常态，不是错误。
+    /// </summary>
+    private void DeleteSaveFile()
+    {
+        if (!File.Exists(SavePath)) return;
+
+        try
+        {
+            File.Delete(SavePath);
+            Debug.Log("已删除存档: " + SavePath);
+        }
+        catch (Exception e)
+        {
+            // 删不掉也不能让新游戏开不起来 —— 只是这次新游戏的"回到存档点"会读到旧档。
+            Debug.LogError("删除存档失败: " + e.Message);
+        }
     }
 
     private void Update()

@@ -140,9 +140,11 @@ Assets/
 
 | 文档 | 内容 |
 |---|---|
-| [docs/save-system.md](docs/save-system.md) | 存档系统：核心机制、三条触发路径、四个必知的坑 |
+| [docs/save-system.md](docs/save-system.md) | 存档系统：核心机制、四条触发路径、四个必知的坑 |
 | [docs/wall-slide-jump.md](docs/wall-slide-jump.md) | 扒墙 / 蹬墙跳：触发条件、参数推导、四个坑 |
 | [docs/slide.md](docs/slide.md) | 滑铲：素材分组验证、输入系统扩展、三个坑 |
+| [docs/enemy-fsm-refactor.md](docs/enemy-fsm-refactor.md) | **待执行**：敌人 FSM 重构方案 —— 把游离在状态机之外的逻辑收回状态 |
+| [docs/player-state-refactor.md](docs/player-state-refactor.md) | **评估稿（尚未决定）**：玩家是否该做状态机重构，含决策触发条件 |
 
 ---
 

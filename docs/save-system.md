@@ -1,6 +1,6 @@
 # 存档系统（Save / Load）
 
-> 记录存档系统的**核心机制**、架构、三条触发路径、以及踩过的坑。
+> 记录存档系统的**核心机制**、架构、四条触发路径、以及踩过的坑。
 > 本文由「修复敌人死亡未持久化」这个 bug 的排查过程整理而来。
 >
 > **只想快速理解机制的话，直接看第二节。**
@@ -177,7 +177,7 @@ Character.RecordHealth()   → MarkCharacterHealth(id, hp)       → characterHe
 
 ---
 
-## 三、三条触发路径
+## 三、四条触发路径
 
 ### ① 碰存档点 → 写盘
 
@@ -217,6 +217,39 @@ loadGameEvent.RaiseEvent()
 
 **这个先后顺序是刻意依赖的**：必须先把存档读进内存，再加载场景 ——
 否则新场景里的对象 `Start()` 时读到的还是旧数据。
+
+### ④ 新游戏 → **清内存 + 删磁盘**
+
+```
+Menu「New Game」/ 死亡面板「Restart」
+ └─ newGameEventSO.RaiseEvent()
+     ├─ DataManager.ResetData()
+     │   ├─ saveData = new Data()      ← 清内存
+     │   └─ DeleteSaveFile()           ← 【必须】删磁盘
+     ├─ SceneLoad.NewGame()            ← 回到 initScene
+     ├─ Character.NewGame()            ← 回满血
+     └─ PlayerController.PlayerInit()  ← 复活并解锁输入
+```
+
+**`DeleteSaveFile()` 这一句是必须的** —— 只清内存的话，「新游戏」只是个**幻觉**：
+
+| 操作 | 只清内存（❌ 错误） | 清内存 + 删盘（✅ 正确） |
+|---|---|---|
+| 新游戏 → **没存档就死** → 点「回到存档点」 | **被传回上一个游戏的存档点** | 从游戏开头重来 |
+| 新游戏 → 回菜单 → 点「继续」 | **读回上一个游戏的进度** | 「继续」等价于新游戏 |
+
+**根源还是同一个母题**：`Load()` 的第一件事是
+
+```csharp
+if (!HasSaveFile) { FallbackToNewGame(); return; }   // ← 它信任"磁盘上没有文件"=="没有存档"
+```
+
+而「只清内存」**并没有让这句话成立** —— 于是 `Load()` 高高兴兴地把**上一个游戏**的存档读了回来。
+
+> ⚠️ **反过来也成立**：`FallbackToNewGame()` 是靠广播 `newGameEvent` 走到 `ResetData()` 的，
+> 所以「没有存档」和「存档损坏读不出来」两条路径也会执行删除 ——
+> 前者文件不存在会静默返回；后者会把读不出来的**损坏存档删掉**
+> （`Load()` 里本来就声明"按没有存档处理"，删掉它让状态一致）。
 
 ---
 
